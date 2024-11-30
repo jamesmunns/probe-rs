@@ -1,5 +1,3 @@
-use async_io::{block_on, Timer};
-use futures_lite::FutureExt;
 use nusb::{transfer::RequestBuffer, Interface};
 use std::{io, time::Duration};
 
@@ -15,13 +13,10 @@ impl InterfaceExt for Interface {
             comp.status.map_err(io::Error::other)?;
 
             let n = comp.data.actual_length();
-            Ok(n)
+            Ok::<usize, io::Error>(n)
         };
 
-        block_on(fut.or(async {
-            Timer::after(timeout).await;
-            Err(std::io::ErrorKind::TimedOut.into())
-        }))
+        todo!("write bulk")
     }
 
     fn read_bulk(&self, endpoint: u8, buf: &mut [u8], timeout: Duration) -> io::Result<usize> {
@@ -31,12 +26,9 @@ impl InterfaceExt for Interface {
 
             let n = comp.data.len();
             buf[..n].copy_from_slice(&comp.data);
-            Ok(n)
+            Ok::<usize, io::Error>(n)
         };
 
-        block_on(fut.or(async {
-            Timer::after(timeout).await;
-            Err(std::io::ErrorKind::TimedOut.into())
-        }))
+        todo!("read bulk")
     }
 }

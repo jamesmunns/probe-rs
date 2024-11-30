@@ -101,16 +101,19 @@ fn selector_matches(selector: &DebugProbeSelector, info: &DeviceInfo) -> bool {
 
 impl StLinkUsbDevice {
     /// Creates and initializes a new USB device.
-    pub fn new_from_selector(selector: &DebugProbeSelector) -> Result<Self, ProbeCreationError> {
-        let device = nusb::list_devices()
+    pub async fn new_from_selector(
+        selector: DebugProbeSelector,
+    ) -> Result<Self, ProbeCreationError> {
+        let device = crate::probe::list::list_devices()
+            .await
             .map_err(ProbeCreationError::Usb)?
             .filter(is_stlink_device)
-            .find(|device| selector_matches(selector, device))
+            .find(|device| selector_matches(&selector, device))
             .ok_or(ProbeCreationError::NotFound)?;
 
         let info = USB_PID_EP_MAP[&device.product_id()].clone();
 
-        let device_handle = device.open().map_err(ProbeCreationError::Usb)?;
+        let device_handle = device.open().await.map_err(ProbeCreationError::Usb)?;
         tracing::debug!("Aquired handle for probe");
 
         let mut endpoint_out = false;

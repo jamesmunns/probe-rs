@@ -11,6 +11,7 @@ pub mod swo;
 
 use std::fmt;
 use std::iter;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bitvec::prelude::*;
@@ -65,8 +66,12 @@ impl std::fmt::Display for JLinkFactory {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for JLinkFactory {
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
         fn open_error(e: std::io::Error, while_: &'static str) -> DebugProbeError {
             let help = if cfg!(windows) {
                 "(this error may be caused by not having the WinUSB driver installed; use Zadig (https://zadig.akeo.ie/) to install it for the J-Link device; this will replace the SEGGER J-Link driver)"
@@ -79,7 +84,8 @@ impl ProbeFactory for JLinkFactory {
             )))
         }
 
-        let mut jlinks = nusb::list_devices()
+        let mut jlinks = crate::probe::list::list_devices()
+            .await
             .map_err(DebugProbeError::Usb)?
             .filter(is_jlink)
             .filter(|info| selector.matches(info))
@@ -97,6 +103,7 @@ impl ProbeFactory for JLinkFactory {
 
         let handle = info
             .open()
+            .await
             .map_err(|e| open_error(e, "opening the USB device"))?;
 
         let configs: Vec<_> = handle.configurations().collect();
@@ -262,17 +269,17 @@ impl ProbeFactory for JLinkFactory {
             _ => 504,
         };
         this.config = this.read_device_config()?;
-        this.connection_handle = if requires_connection_handle(selector) {
+        this.connection_handle = if requires_connection_handle(&selector) {
             Some(this.register_connection()?)
         } else {
             None
         };
 
-        Ok(Box::new(this))
+        Ok(Box::new(this) as Box<dyn DebugProbe>)
     }
 
-    fn list_probes(&self) -> Vec<DebugProbeInfo> {
-        list_jlink_devices()
+    async fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
+        list_jlink_devices().await
     }
 }
 
@@ -1315,8 +1322,8 @@ impl SwoAccess for JLink {
 }
 
 #[tracing::instrument]
-fn list_jlink_devices() -> Vec<DebugProbeInfo> {
-    let Ok(devices) = nusb::list_devices() else {
+async fn list_jlink_devices() -> Vec<DebugProbeInfo> {
+    let Ok(devices) = crate::probe::list::list_devices().await else {
         return vec![];
     };
 
@@ -1328,7 +1335,7 @@ fn list_jlink_devices() -> Vec<DebugProbeInfo> {
                 info.vendor_id(),
                 info.product_id(),
                 info.serial_number().map(|s| s.to_string()),
-                &JLinkFactory,
+                Arc::new(JLinkFactory) as Arc<dyn ProbeFactory>,
                 None,
             )
         })

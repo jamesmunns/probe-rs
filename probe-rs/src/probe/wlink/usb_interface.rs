@@ -19,8 +19,11 @@ pub struct WchLinkUsbDevice {
 }
 
 impl WchLinkUsbDevice {
-    pub fn new_from_selector(selector: &DebugProbeSelector) -> Result<Self, ProbeCreationError> {
-        let device = nusb::list_devices()
+    pub async fn new_from_selector(
+        selector: DebugProbeSelector,
+    ) -> Result<Self, ProbeCreationError> {
+        let device = crate::probe::list::list_devices()
+            .await
             .map_err(ProbeCreationError::Usb)?
             .filter(|device| selector.matches(device))
             .find(|device| get_wlink_info(device).is_some())
@@ -29,7 +32,7 @@ impl WchLinkUsbDevice {
         let mut endpoint_out = false;
         let mut endpoint_in = false;
 
-        let device_handle = device.open().map_err(ProbeCreationError::Usb)?;
+        let device_handle = device.open().await.map_err(ProbeCreationError::Usb)?;
 
         let mut configs = device_handle.configurations();
         if let Some(config) = configs.next() {

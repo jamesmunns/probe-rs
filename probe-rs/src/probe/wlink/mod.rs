@@ -3,8 +3,8 @@
 //! The protocol is mostly undocumented, and is changing between firmware versions.
 //! For more details see: <https://github.com/ch32-rs/wlink>
 
-use std::fmt;
 use std::time::Duration;
+use std::{fmt, sync::Arc};
 
 use nusb::DeviceInfo;
 use probe_rs_target::ScanChainElement;
@@ -159,9 +159,13 @@ impl std::fmt::Display for WchLinkFactory {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for WchLinkFactory {
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
-        let device = WchLinkUsbDevice::new_from_selector(selector)?;
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
+        let device = WchLinkUsbDevice::new_from_selector(selector).await?;
         let mut wlink = WchLink {
             device,
             name: "WCH-Link".into(),
@@ -177,11 +181,11 @@ impl ProbeFactory for WchLinkFactory {
 
         wlink.init()?;
 
-        Ok(Box::new(wlink))
+        Ok(Box::new(wlink) as Box<dyn DebugProbe>)
     }
 
-    fn list_probes(&self) -> Vec<DebugProbeInfo> {
-        list_wlink_devices()
+    async fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
+        list_wlink_devices().await
     }
 }
 
@@ -519,7 +523,7 @@ fn get_wlink_info(device: &DeviceInfo) -> Option<DebugProbeInfo> {
             VENDOR_ID,
             PRODUCT_ID,
             device.serial_number().map(|s| s.to_string()),
-            &WchLinkFactory,
+            Arc::new(WchLinkFactory) as Arc<dyn ProbeFactory>,
             None,
         ))
     } else {
@@ -528,9 +532,9 @@ fn get_wlink_info(device: &DeviceInfo) -> Option<DebugProbeInfo> {
 }
 
 #[tracing::instrument(skip_all)]
-fn list_wlink_devices() -> Vec<DebugProbeInfo> {
+async fn list_wlink_devices() -> Vec<DebugProbeInfo> {
     tracing::debug!("Searching for WCH-Link(RV) probes");
-    let Ok(devices) = nusb::list_devices() else {
+    let Ok(devices) = crate::probe::list::list_devices().await else {
         return vec![];
     };
     let probes: Vec<_> = devices

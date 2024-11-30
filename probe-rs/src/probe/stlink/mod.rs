@@ -58,9 +58,13 @@ impl std::fmt::Display for StLinkFactory {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for StLinkFactory {
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
-        let device = StLinkUsbDevice::new_from_selector(selector)?;
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
+        let device = StLinkUsbDevice::new_from_selector(selector).await?;
         let mut stlink = StLink {
             name: format!("ST-Link {}", &device.info.version_name),
             device,
@@ -77,11 +81,11 @@ impl ProbeFactory for StLinkFactory {
 
         stlink.init()?;
 
-        Ok(Box::new(stlink))
+        Ok(Box::new(stlink) as Box<dyn DebugProbe>)
     }
 
-    fn list_probes(&self) -> Vec<DebugProbeInfo> {
-        tools::list_stlink_devices()
+    async fn list_probes(&self) -> Vec<DebugProbeInfo> {
+        tools::list_stlink_devices().await
     }
 }
 

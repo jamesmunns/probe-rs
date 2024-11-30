@@ -15,7 +15,7 @@ use crate::{
             general::info::{CapabilitiesCommand, PacketCountCommand, SWOTraceBufferSizeCommand},
             CmsisDapError, RequestError,
         },
-        BatchCommand, DebugProbe, DebugProbeError, DebugProbeInfo, DebugProbeSelector,
+        BatchCommand, DebugProbe, DebugProbeError, DebugProbeSelector,
         JtagChainItem, ProbeFactory, WireProtocol,
     },
     CoreStatus,
@@ -51,7 +51,7 @@ use commands::{
 };
 use probe_rs_target::ScanChainElement;
 
-use std::{fmt::Write, time::Duration};
+use std::{fmt::Write,  time::Duration};
 
 use bitvec::prelude::*;
 
@@ -67,15 +67,19 @@ impl std::fmt::Display for CmsisDapFactory {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for CmsisDapFactory {
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
         Ok(Box::new(CmsisDap::new_from_device(
-            tools::open_device_from_selector(selector)?,
-        )?))
+            tools::open_device_from_selector(&selector).await?,
+        )?) as Box<dyn DebugProbe>)
     }
 
-    fn list_probes(&self) -> Vec<DebugProbeInfo> {
-        tools::list_cmsisdap_devices()
+    async fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
+        tools::list_cmsisdap_devices().await
     }
 }
 

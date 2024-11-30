@@ -13,7 +13,7 @@ use crate::{
         },
     },
     probe::{
-        common::RawJtagIo, DebugProbe, DebugProbeError, DebugProbeInfo, DebugProbeSelector,
+        common::RawJtagIo, DebugProbe, DebugProbeError, DebugProbeSelector,
         ProbeFactory, WireProtocol,
     },
 };
@@ -35,18 +35,22 @@ impl std::fmt::Display for EspUsbJtagFactory {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for EspUsbJtagFactory {
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
-        let protocol = ProtocolHandler::new_from_selector(selector)?;
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
+        let protocol = ProtocolHandler::new_from_selector(&selector).await?;
 
         Ok(Box::new(EspUsbJtag {
             protocol,
             jtag_state: JtagDriverState::default(),
-        }))
+        }) as Box<dyn DebugProbe>)
     }
 
-    fn list_probes(&self) -> Vec<DebugProbeInfo> {
-        protocol::list_espjtag_devices()
+    async fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
+        protocol::list_espjtag_devices().await
     }
 }
 

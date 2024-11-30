@@ -592,14 +592,18 @@ impl Probe {
 ///
 /// The `std::fmt::Display` implementation will be used to display the probe in the list of available probes,
 /// and should return a human-readable name for the probe type.
+#[async_trait::async_trait(?Send)]
 pub trait ProbeFactory: std::any::Any + std::fmt::Display + std::fmt::Debug + Sync {
     /// Creates a new boxed [`DebugProbe`] from a given [`DebugProbeSelector`].
     /// This will be called for all available debug drivers when discovering probes.
     /// When opening, it will open the first probe which succeeds during this call.
-    fn open(&self, selector: &DebugProbeSelector) -> Result<Box<dyn DebugProbe>, DebugProbeError>;
+    async fn open(
+        &self,
+        selector: DebugProbeSelector,
+    ) -> Result<Box<dyn DebugProbe>, DebugProbeError>;
 
     /// Returns a list of all available debug probes of the current type.
-    fn list_probes(&self) -> Vec<DebugProbeInfo>;
+    async fn list_probes(&self) -> Vec<DebugProbeInfo>;
 }
 
 /// An abstraction over general debug probe.
@@ -794,7 +798,7 @@ impl PartialEq for dyn ProbeFactory {
 }
 
 /// Gathers some information about a debug probe which was found during a scan.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct DebugProbeInfo {
     /// The name of the debug probe.
     pub identifier: String,
@@ -810,7 +814,7 @@ pub struct DebugProbeInfo {
     pub hid_interface: Option<u8>,
 
     /// A reference to the [`ProbeFactory`] that created this info object.
-    probe_factory: &'static dyn ProbeFactory,
+    probe_factory: Arc<dyn ProbeFactory>,
 }
 
 impl std::fmt::Display for DebugProbeInfo {
@@ -834,7 +838,7 @@ impl DebugProbeInfo {
         vendor_id: u16,
         product_id: u16,
         serial_number: Option<String>,
-        probe_factory: &'static dyn ProbeFactory,
+        probe_factory: Arc<dyn ProbeFactory>,
         hid_interface: Option<u8>,
     ) -> Self {
         Self {
@@ -848,10 +852,11 @@ impl DebugProbeInfo {
     }
 
     /// Open the probe described by this `DebugProbeInfo`.
-    pub fn open(&self) -> Result<Probe, DebugProbeError> {
+    pub async fn open(&self) -> Result<Probe, DebugProbeError> {
         let selector = DebugProbeSelector::from(self);
         self.probe_factory
-            .open(&selector)
+            .open(selector)
+            .await
             .map(Probe::from_specific_probe)
     }
 
@@ -1400,7 +1405,7 @@ mod test {
             0x12,
             0x23,
             Some("mock_serial".to_owned()),
-            &ftdi::FtdiProbeFactory,
+            ftdi::FtdiProbeFactory,
             None,
         );
 

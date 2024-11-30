@@ -263,8 +263,8 @@ impl Builder {
         self
     }
 
-    pub fn usb_open(self, usb_device: DeviceInfo) -> Result<Device, DebugProbeError> {
-        let mut device = Device::open(usb_device, self.interface)?;
+    pub async fn usb_open(self, usb_device: DeviceInfo) -> Result<Device, DebugProbeError> {
+        let mut device = Device::open(usb_device, self.interface).await?;
 
         device.context.usb_read_timeout = self.read_timeout;
         device.context.usb_write_timeout = self.write_timeout;
@@ -290,7 +290,7 @@ impl std::fmt::Debug for Device {
 }
 
 impl Device {
-    fn open(usb_device: DeviceInfo, interface: Interface) -> Result<Self, DebugProbeError> {
+    async fn open(usb_device: DeviceInfo, interface: Interface) -> Result<Self, DebugProbeError> {
         fn open_error(e: std::io::Error, while_: &'static str) -> DebugProbeError {
             let help = if cfg!(windows) {
                 "(this error may be caused by not having the WinUSB driver installed; use Zadig (https://zadig.akeo.ie/) to install it for the FTDI device; this will replace the FTDI driver)"
@@ -305,6 +305,7 @@ impl Device {
 
         let handle = usb_device
             .open()
+            .await
             .map_err(|e| open_error(e, "opening the USB device"))?;
 
         let configs: Vec<_> = handle.configurations().collect();

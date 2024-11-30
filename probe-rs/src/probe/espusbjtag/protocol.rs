@@ -5,12 +5,13 @@ use nusb::{
 };
 use std::{
     fmt::Debug,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use crate::probe::{
     espusbjtag::EspUsbJtagFactory, usb_util::InterfaceExt, DebugProbeError, DebugProbeInfo,
-    DebugProbeSelector, ProbeCreationError, ProbeError,
+    DebugProbeSelector, ProbeCreationError, ProbeError, ProbeFactory,
 };
 
 const JTAG_PROTOCOL_CAPABILITIES_VERSION: u8 = 1;
@@ -85,14 +86,17 @@ impl Debug for ProtocolHandler {
 }
 
 impl ProtocolHandler {
-    pub fn new_from_selector(selector: &DebugProbeSelector) -> Result<Self, ProbeCreationError> {
-        let device = nusb::list_devices()
+    pub async fn new_from_selector(
+        selector: &DebugProbeSelector,
+    ) -> Result<Self, ProbeCreationError> {
+        let device = crate::probe::list::list_devices()
+            .await
             .map_err(ProbeCreationError::Usb)?
             .filter(is_espjtag_device)
             .find(|device| selector.matches(device))
             .ok_or(ProbeCreationError::NotFound)?;
 
-        let device_handle = device.open().map_err(ProbeCreationError::Usb)?;
+        let device_handle = device.open().await.map_err(ProbeCreationError::Usb)?;
 
         tracing::debug!("Aquired handle for probe");
 
@@ -546,8 +550,8 @@ pub(super) fn is_espjtag_device(device: &DeviceInfo) -> bool {
 }
 
 #[tracing::instrument(skip_all)]
-pub(super) fn list_espjtag_devices() -> Vec<DebugProbeInfo> {
-    let Ok(devices) = nusb::list_devices() else {
+pub(super) async fn list_espjtag_devices() -> Vec<DebugProbeInfo> {
+    let Ok(devices) = crate::probe::list::list_devices().await else {
         return vec![];
     };
 
@@ -559,7 +563,7 @@ pub(super) fn list_espjtag_devices() -> Vec<DebugProbeInfo> {
                 device.vendor_id(),
                 device.product_id(),
                 device.serial_number().map(Into::into),
-                &EspUsbJtagFactory,
+                Arc::new(EspUsbJtagFactory) as Arc<dyn ProbeFactory>,
                 None,
             )
         })

@@ -64,6 +64,9 @@
 //! [Target], [Session]  and [Core] structs.
 //!
 //! [Probe]: probe::Probe
+#![feature(simd_wasm64)]
+#![feature(extern_types)]
+#![feature(stdarch_wasm_atomic_wait)]
 #![warn(missing_docs)]
 #![recursion_limit = "256"] // required by bitfield!
 #![cfg_attr(probers_docsrs, feature(doc_cfg))] // Used for docs.rs

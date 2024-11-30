@@ -399,14 +399,14 @@ impl Session {
 
     /// Automatically creates a session with the first connected probe found.
     #[tracing::instrument(skip(target))]
-    pub fn auto_attach(
+    pub async fn auto_attach(
         target: impl Into<TargetSelector>,
         permissions: Permissions,
     ) -> Result<Session, Error> {
         // Get a list of all available debug probes.
         let lister = Lister::new();
 
-        let probes = lister.list_all();
+        let probes = lister.list_all().await;
 
         // Use the first probe found.
         let probe = probes
@@ -414,7 +414,8 @@ impl Session {
             .ok_or(Error::Probe(DebugProbeError::ProbeCouldNotBeCreated(
                 ProbeCreationError::NotFound,
             )))?
-            .open()?;
+            .open()
+            .await?;
 
         // Attach to a chip.
         probe.attach(target, permissions)

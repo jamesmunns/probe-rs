@@ -2,6 +2,7 @@
 use std::{
     char,
     io::{BufReader, BufWriter, Read, Write},
+    sync::Arc,
     time::Duration,
 };
 
@@ -1413,15 +1414,16 @@ fn black_magic_debug_port_info(
         vendor_id,
         product_id,
         serial_number,
-        probe_factory: &BlackMagicProbeFactory,
+        probe_factory: Arc::new(BlackMagicProbeFactory) as Arc<dyn ProbeFactory>,
         hid_interface,
     })
 }
 
+#[async_trait::async_trait(?Send)]
 impl ProbeFactory for BlackMagicProbeFactory {
-    fn open(
+    async fn open(
         &self,
-        selector: &super::DebugProbeSelector,
+        selector: super::DebugProbeSelector,
     ) -> Result<Box<dyn DebugProbe>, DebugProbeError> {
         // Ensure the VID and PID match Black Magic Probes
         if selector.vendor_id != BLACK_MAGIC_PROBE_VID
@@ -1492,7 +1494,7 @@ impl ProbeFactory for BlackMagicProbeFactory {
         ))
     }
 
-    fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
+    async fn list_probes(&self) -> Vec<super::DebugProbeInfo> {
         let mut probes = vec![];
         let Ok(ports) = available_ports() else {
             return probes;
