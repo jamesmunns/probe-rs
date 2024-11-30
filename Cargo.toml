@@ -14,12 +14,12 @@ resolver = "2"
 members = [
     "probe-rs",
     "probe-rs-target",
-    "rtthost",
-    "smoke-tester",
-    "xtask",
-    "target-gen",
+    # "rtthost",
+    # "smoke-tester",
+    # "xtask",
+    # "target-gen",
     # "probe-rs-tools",
-    "probe-rs-mi",
+    # "probe-rs-mi",
 ]
 exclude = ["probe-rs/tests/gpio-hal-blinky"]
 

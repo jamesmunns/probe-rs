@@ -1611,6 +1611,7 @@ mod test {
 
     /// This is just a blanket impl that will crash if used (only relevant in tests,
     /// so no problem as we do not use it) to fulfill the marker requirement.
+    #[async_trait::async_trait(?Send)]
     impl DebugProbe for MockJaylink {
         fn get_name(&self) -> &str {
             todo!()

@@ -13,8 +13,8 @@ use crate::{
         },
     },
     probe::{
-        common::RawJtagIo, DebugProbe, DebugProbeError, DebugProbeSelector,
-        ProbeFactory, WireProtocol,
+        common::RawJtagIo, DebugProbe, DebugProbeError, DebugProbeSelector, ProbeFactory,
+        WireProtocol,
     },
 };
 use bitvec::prelude::*;
@@ -87,6 +87,7 @@ impl RawJtagIo for EspUsbJtag {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for EspUsbJtag {
     fn select_protocol(&mut self, protocol: WireProtocol) -> Result<(), DebugProbeError> {
         if matches!(protocol, WireProtocol::Jtag) {

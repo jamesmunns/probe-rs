@@ -108,6 +108,7 @@ impl SwoConfig {
 }
 
 /// An interface to operate SWO to be implemented on drivers that support SWO.
+#[async_trait::async_trait]
 pub trait SwoAccess {
     /// Configure a SwoAccess interface for reading SWO data.
     fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError>;

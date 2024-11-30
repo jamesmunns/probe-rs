@@ -56,6 +56,7 @@ impl WchLinkUsbDevice {
         tracing::trace!("Aquired handle for probe");
         let device_handle = device_handle
             .claim_interface(0)
+            .await
             .map_err(ProbeCreationError::Usb)?;
         tracing::trace!("Claimed interface 0 of USB device.");
 
@@ -66,7 +67,7 @@ impl WchLinkUsbDevice {
         Ok(usb_wlink)
     }
 
-    pub(crate) fn send_command<C: WchLinkCommand + std::fmt::Debug>(
+    pub(crate) async fn send_command<C: WchLinkCommand + std::fmt::Debug>(
         &mut self,
         cmd: C,
     ) -> Result<C::Response, DebugProbeError> {
@@ -80,6 +81,7 @@ impl WchLinkUsbDevice {
         let written_bytes = self
             .device_handle
             .write_bulk(ENDPOINT_OUT, &rxbuf[..len], timeout)
+            .await
             .map_err(DebugProbeError::Usb)?;
 
         if written_bytes != len {
@@ -94,6 +96,7 @@ impl WchLinkUsbDevice {
         let read_bytes = self
             .device_handle
             .read_bulk(ENDPOINT_IN, &mut rxbuf[..], timeout)
+            .await
             .map_err(DebugProbeError::Usb)?;
 
         if read_bytes < 3 {

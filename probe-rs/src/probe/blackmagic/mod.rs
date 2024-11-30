@@ -1021,6 +1021,7 @@ impl BlackMagicProbe {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for BlackMagicProbe {
     fn get_name(&self) -> &str {
         "Black Magic probe"

@@ -156,6 +156,7 @@ impl ProtocolHandler {
 
         let iface = device_handle
             .claim_interface(interface_number)
+            .await
             .map_err(ProbeCreationError::Usb)?;
 
         let start = Instant::now();

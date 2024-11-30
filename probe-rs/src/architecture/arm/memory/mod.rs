@@ -13,6 +13,7 @@ use super::{
 pub use romtable::{Component, ComponentId, CoresightComponent, PeripheralType};
 
 /// An ArmMemoryInterface (ArmProbeInterface + MemoryAp)
+#[async_trait::async_trait]
 pub trait ArmMemoryInterface: SwdSequence + ArmMemoryInterfaceShim {
     /// The underlying MemoryAp.
     fn ap(&mut self) -> &mut MemoryAp;

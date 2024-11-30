@@ -511,24 +511,24 @@ impl CoresightComponent {
     }
 
     /// Reads a register of the component pointed to by this romtable entry.
-    pub fn read_reg(
+    pub async fn read_reg(
         &self,
         interface: &mut dyn ArmProbeInterface,
         offset: u32,
     ) -> Result<u32, ArmError> {
-        let mut memory = interface.memory_interface(&self.ap_address)?;
+        let mut memory = interface.memory_interface(&self.ap_address).await?;
         let value = memory.read_word_32(self.component.id().component_address + offset as u64)?;
         Ok(value)
     }
 
     /// Writes a register of the component pointed to by this romtable entry.
-    pub fn write_reg(
+    pub async fn write_reg(
         &self,
         interface: &mut dyn ArmProbeInterface,
         offset: u32,
         value: u32,
     ) -> Result<(), ArmError> {
-        let mut memory = interface.memory_interface(&self.ap_address)?;
+        let mut memory = interface.memory_interface(&self.ap_address).await?;
         memory.write_word_32(self.component.id().component_address + offset as u64, value)?;
         Ok(())
     }

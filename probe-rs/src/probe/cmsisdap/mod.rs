@@ -15,8 +15,8 @@ use crate::{
             general::info::{CapabilitiesCommand, PacketCountCommand, SWOTraceBufferSizeCommand},
             CmsisDapError, RequestError,
         },
-        BatchCommand, DebugProbe, DebugProbeError, DebugProbeSelector,
-        JtagChainItem, ProbeFactory, WireProtocol,
+        BatchCommand, DebugProbe, DebugProbeError, DebugProbeSelector, JtagChainItem, ProbeFactory,
+        WireProtocol,
     },
     CoreStatus,
 };
@@ -51,7 +51,7 @@ use commands::{
 };
 use probe_rs_target::ScanChainElement;
 
-use std::{fmt::Write,  time::Duration};
+use std::{fmt::Write, time::Duration};
 
 use bitvec::prelude::*;
 
@@ -785,6 +785,7 @@ impl CmsisDap {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for CmsisDap {
     fn get_name(&self) -> &str {
         "CMSIS-DAP"

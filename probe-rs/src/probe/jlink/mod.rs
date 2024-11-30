@@ -177,6 +177,7 @@ impl ProbeFactory for JLinkFactory {
 
         let handle = handle
             .claim_interface(intf)
+            .await
             .map_err(|e| open_error(e, "taking control over USB device"))?;
 
         let mut this = JLink {
@@ -936,6 +937,7 @@ impl JLink {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for JLink {
     fn select_protocol(&mut self, protocol: WireProtocol) -> Result<(), DebugProbeError> {
         if self.caps.contains(Capability::SelectIf) {

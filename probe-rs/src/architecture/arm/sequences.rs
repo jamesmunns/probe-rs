@@ -405,13 +405,14 @@ fn cortex_m_reset_system(interface: &mut dyn ArmMemoryInterface) -> Result<(), A
 /// A interface to operate debug sequences for ARM targets.
 ///
 /// Should be implemented on a custom handle for chips that require special sequence code.
+#[async_trait::async_trait]
 pub trait ArmDebugSequence: Send + Sync + Debug {
     /// Assert a system-wide reset line nRST. This is based on the
     /// `ResetHardwareAssert` function from the [ARM SVD Debug Description].
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#resetHardwareAssert
     #[doc(alias = "ResetHardwareAssert")]
-    fn reset_hardware_assert(&self, interface: &mut dyn DapProbe) -> Result<(), ArmError> {
+    async fn reset_hardware_assert(&self, interface: &mut dyn DapProbe) -> Result<(), ArmError> {
         let mut n_reset = Pins(0);
         n_reset.set_nreset(true);
 
@@ -425,7 +426,10 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#resetHardwareDeassert
     #[doc(alias = "ResetHardwareDeassert")]
-    fn reset_hardware_deassert(&self, memory: &mut dyn ArmMemoryInterface) -> Result<(), ArmError> {
+    async fn reset_hardware_deassert(
+        &self,
+        memory: &mut dyn ArmMemoryInterface,
+    ) -> Result<(), ArmError> {
         let mut n_reset = Pins(0);
         n_reset.set_nreset(true);
         let n_reset = n_reset.0 as u32;
@@ -462,7 +466,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     /// [ARM SVD Debug Description]:
     ///     https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugPortSetup
     #[doc(alias = "DebugPortSetup")]
-    fn debug_port_setup(
+    async fn debug_port_setup(
         &self,
         interface: &mut dyn DapProbe,
         dp: DpAddress,
@@ -571,7 +575,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugPortStart
     #[doc(alias = "DebugPortStart")]
-    fn debug_port_start(
+    async fn debug_port_start(
         &self,
         interface: &mut ArmCommunicationInterface<Initialized>,
         dp: DpAddress,
@@ -640,7 +644,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugCoreStart
     #[doc(alias = "DebugCoreStart")]
-    fn debug_core_start(
+    async fn debug_core_start(
         &self,
         interface: &mut dyn ArmProbeInterface,
         core_ap: &FullyQualifiedApAddress,
@@ -667,7 +671,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#resetCatchSet
     #[doc(alias = "ResetCatchSet")]
-    fn reset_catch_set(
+    async fn reset_catch_set(
         &self,
         core: &mut dyn ArmMemoryInterface,
         core_type: CoreType,
@@ -690,7 +694,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#resetCatchClear
     #[doc(alias = "ResetCatchClear")]
-    fn reset_catch_clear(
+    async fn reset_catch_clear(
         &self,
         core: &mut dyn ArmMemoryInterface,
         core_type: CoreType,
@@ -716,7 +720,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     /// This is based on the `TraceStart` function from the [ARM SVD Debug Description].
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#traceStart
-    fn trace_start(
+    async fn trace_start(
         &self,
         interface: &mut dyn ArmProbeInterface,
         components: &[CoresightComponent],
@@ -743,7 +747,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#resetSystem
     #[doc(alias = "ResetSystem")]
-    fn reset_system(
+    async fn reset_system(
         &self,
         interface: &mut dyn ArmMemoryInterface,
         core_type: CoreType,
@@ -767,7 +771,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugDeviceUnlock
     #[doc(alias = "DebugDeviceUnlock")]
-    fn debug_device_unlock(
+    async fn debug_device_unlock(
         &self,
         _interface: &mut dyn ArmProbeInterface,
         _default_ap: &FullyQualifiedApAddress,
@@ -782,7 +786,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.htmll#recoverSupportStart
     #[doc(alias = "RecoverSupportStart")]
-    fn recover_support_start(
+    async fn recover_support_start(
         &self,
         _interface: &mut dyn ArmMemoryInterface,
     ) -> Result<(), ArmError> {
@@ -796,7 +800,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugCoreStop
     #[doc(alias = "DebugCoreStop")]
-    fn debug_core_stop(
+    async fn debug_core_stop(
         &self,
         interface: &mut dyn ArmMemoryInterface,
         core_type: CoreType,
@@ -822,7 +826,11 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// [ARM SVD Debug Description]: https://open-cmsis-pack.github.io/Open-CMSIS-Pack-Spec/main/html/debug_description.html#debugPortStop
     #[doc(alias = "DebugPortStop")]
-    fn debug_port_stop(&self, interface: &mut dyn DapProbe, dp: DpAddress) -> Result<(), ArmError> {
+    async fn debug_port_stop(
+        &self,
+        interface: &mut dyn DapProbe,
+        dp: DpAddress,
+    ) -> Result<(), ArmError> {
         tracing::info!("Powering down debug port {dp:x?}");
         // Select Bank 0
         interface.raw_write_register(PortType::DebugPort, Select::ADDRESS, 0)?;
@@ -858,7 +866,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     ///
     /// This is not based on a sequence from the Open-CMSIS-Pack standard.
     #[tracing::instrument(level = "debug", skip_all)]
-    fn debug_port_connect(
+    async fn debug_port_connect(
         &self,
         interface: &mut dyn DapProbe,
         dp: DpAddress,
@@ -991,7 +999,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
     }
 
     /// Return the Debug Erase Sequence implementation if it exists
-    fn debug_erase_sequence(&self) -> Option<Arc<dyn DebugEraseSequence>> {
+    async fn debug_erase_sequence(&self) -> Option<Arc<dyn DebugEraseSequence>> {
         None
     }
 

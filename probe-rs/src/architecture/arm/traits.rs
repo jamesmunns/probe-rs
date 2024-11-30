@@ -238,6 +238,7 @@ pub trait RawDapAccess {
 /// Operations on this trait perform logical register reads/writes. Implementations
 /// are responsible for bank switching and AP selection, so one method call can result
 /// in multiple transactions on the wire, if necessary.
+#[async_trait::async_trait(?Send)]
 pub trait DapAccess {
     /// Read a Debug Port register.
     ///
@@ -247,7 +248,7 @@ pub trait DapAccess {
     /// If the device uses multiple debug ports, this will switch the active debug port if necessary.
     /// In case this happens, all queued operations will be performed, and returned errors can be from
     /// these operations as well.
-    fn read_raw_dp_register(&mut self, dp: DpAddress, addr: u8) -> Result<u32, ArmError>;
+    async fn read_raw_dp_register(&mut self, dp: DpAddress, addr: u8) -> Result<u32, ArmError>;
 
     /// Write a Debug Port register.
     ///
@@ -257,7 +258,7 @@ pub trait DapAccess {
     /// If the device uses multiple debug ports, this will switch the active debug port if necessary.
     /// In case this happens, all queued operations will be performed, and returned errors can be from
     /// these operations as well.
-    fn write_raw_dp_register(
+    async fn write_raw_dp_register(
         &mut self,
         dp: DpAddress,
         addr: u8,
@@ -268,7 +269,7 @@ pub trait DapAccess {
     ///
     /// Highest 4 bits of `addr` are interpreted as the bank number, implementations
     /// will do bank switching if necessary.
-    fn read_raw_ap_register(
+    async fn read_raw_ap_register(
         &mut self,
         ap: &FullyQualifiedApAddress,
         addr: u8,
@@ -281,14 +282,14 @@ pub trait DapAccess {
     ///
     /// Highest 4 bits of `addr` are interpreted as the bank number, implementations
     /// will do bank switching if necessary.
-    fn read_raw_ap_register_repeated(
+    async fn read_raw_ap_register_repeated(
         &mut self,
         ap: &FullyQualifiedApAddress,
         addr: u8,
         values: &mut [u32],
     ) -> Result<(), ArmError> {
         for val in values {
-            *val = self.read_raw_ap_register(ap, addr)?;
+            *val = self.read_raw_ap_register(ap, addr).await?;
         }
         Ok(())
     }
@@ -297,7 +298,7 @@ pub trait DapAccess {
     ///
     /// Highest 4 bits of `addr` are interpreted as the bank number, implementations
     /// will do bank switching if necessary.
-    fn write_raw_ap_register(
+    async fn write_raw_ap_register(
         &mut self,
         ap: &FullyQualifiedApAddress,
         addr: u8,
@@ -311,14 +312,14 @@ pub trait DapAccess {
     ///
     /// Highest 4 bits of `addr` are interpreted as the bank number, implementations
     /// will do bank switching if necessary.
-    fn write_raw_ap_register_repeated(
+    async fn write_raw_ap_register_repeated(
         &mut self,
         ap: &FullyQualifiedApAddress,
         addr: u8,
         values: &[u32],
     ) -> Result<(), ArmError> {
         for val in values {
-            self.write_raw_ap_register(ap, addr, *val)?;
+            self.write_raw_ap_register(ap, addr, *val).await?;
         }
         Ok(())
     }

@@ -118,6 +118,7 @@ test-case = "3"
 test-log = { version = "0.2.16", features = ["trace"] }
 termtree = "0.5"
 insta = { version = "1.38", default-features = false, features = ["yaml"] }
+pollster = { version = "0.4", features = ["macro"] }
 
 [[package.metadata.release.pre-release-replacements]]
 file = "../CHANGELOG.md"

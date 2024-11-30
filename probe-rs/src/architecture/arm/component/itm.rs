@@ -49,9 +49,10 @@ impl<'a> Itm<'a> {
     /// This function enables the ITM unit as a whole. It does not actually send any data after enabling it.
     ///
     /// To enable actual transaction of data, see [`Itm::tx_enable`].
-    pub fn unlock(&mut self) -> Result<(), Error> {
+    pub async fn unlock(&mut self) -> Result<(), Error> {
         self.component
-            .write_reg(self.interface, REGISTER_OFFSET_ACCESS, 0xC5AC_CE55)?;
+            .write_reg(self.interface, REGISTER_OFFSET_ACCESS, 0xC5AC_CE55)
+            .await?;
 
         Ok(())
     }
@@ -59,10 +60,11 @@ impl<'a> Itm<'a> {
     /// Enable the ITM TX to send tracing data to the TPIU.
     ///
     /// This enables the actual TX pin of the overarching TPIU which is the parent peripheral of the ITM that multiplexes all data.
-    pub fn tx_enable(&mut self) -> Result<(), Error> {
+    pub async fn tx_enable(&mut self) -> Result<(), Error> {
         let mut value = self
             .component
-            .read_reg(self.interface, REGISTER_OFFSET_ITM_TCR)?;
+            .read_reg(self.interface, REGISTER_OFFSET_ITM_TCR)
+            .await?;
 
         value |= 1 << 0; // ITMENA: enable ITM (master switch)
         value |= 1 << 1; // TSENA: enable local timestamps
@@ -71,14 +73,17 @@ impl<'a> Itm<'a> {
         value |= 1 << 11; // GTSFREQ: generate global timestamp every 8192 cycles
         value |= 13 << 16; // 7 bits trace bus ID
         self.component
-            .write_reg(self.interface, REGISTER_OFFSET_ITM_TCR, value)?;
+            .write_reg(self.interface, REGISTER_OFFSET_ITM_TCR, value)
+            .await?;
 
         // Enable all 32 channels.
-        self.component.write_reg(
-            self.interface,
-            register::ITM_TER::ADDRESS_OFFSET as u32,
-            register::ITM_TER::enable_all().into(),
-        )?;
+        self.component
+            .write_reg(
+                self.interface,
+                register::ITM_TER::ADDRESS_OFFSET as u32,
+                register::ITM_TER::enable_all().into(),
+            )
+            .await?;
 
         Ok(())
     }

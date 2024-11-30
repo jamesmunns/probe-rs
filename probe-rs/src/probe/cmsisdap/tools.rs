@@ -212,7 +212,7 @@ pub async fn open_v2_device(device_info: &DeviceInfo) -> Option<CmsisDapDevice> 
             tracing::info!("passed 3");
 
             // Attempt to claim this interface
-            match device.claim_interface(interface.interface_number()) {
+            match device.claim_interface(interface.interface_number()).await {
                 Ok(handle) => {
                     tracing::debug!("Opening {:04x}:{:04x} in CMSIS-DAPv2 mode", vid, pid);
                     return Some(CmsisDapDevice::V2 {

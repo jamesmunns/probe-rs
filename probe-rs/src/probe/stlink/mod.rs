@@ -106,6 +106,7 @@ pub struct StLink<D: StLinkUsb> {
     opened_aps: Vec<u8>,
 }
 
+#[async_trait::async_trait]
 impl DebugProbe for StLink<StLinkUsbDevice> {
     fn get_name(&self) -> &str {
         &self.name
@@ -118,7 +119,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         }
     }
 
-    fn set_speed(&mut self, speed_khz: u32) -> Result<u32, DebugProbeError> {
+    async fn set_speed(&mut self, speed_khz: u32) -> Result<u32, DebugProbeError> {
         match self.hw_version.cmp(&3) {
             Ordering::Less => match self.protocol {
                 WireProtocol::Swd => {
@@ -169,7 +170,10 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         }
     }
 
-    fn set_scan_chain(&mut self, scan_chain: Vec<ScanChainElement>) -> Result<(), DebugProbeError> {
+    async fn set_scan_chain(
+        &mut self,
+        scan_chain: Vec<ScanChainElement>,
+    ) -> Result<(), DebugProbeError> {
         tracing::info!("Setting scan chain to {:?}", scan_chain);
         self.scan_chain = Some(scan_chain);
         Ok(())
@@ -191,7 +195,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
     }
 
     #[tracing::instrument(skip(self))]
-    fn attach(&mut self) -> Result<(), DebugProbeError> {
+    async fn attach(&mut self) -> Result<(), DebugProbeError> {
         self.enter_idle()?;
 
         let param = match self.protocol {
@@ -235,17 +239,17 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         // we set the speed again here.
         match self.protocol {
             WireProtocol::Jtag => {
-                self.set_speed(self.jtag_speed_khz)?;
+                self.set_speed(self.jtag_speed_khz).await?;
             }
             WireProtocol::Swd => {
-                self.set_speed(self.swd_speed_khz)?;
+                self.set_speed(self.swd_speed_khz).await?;
             }
         }
 
         Ok(())
     }
 
-    fn detach(&mut self) -> Result<(), crate::Error> {
+    async fn detach(&mut self) -> Result<(), crate::Error> {
         tracing::debug!("Detaching from STLink.");
         if self.swo_enabled {
             self.disable_swo().map_err(crate::Error::Arm)?;
@@ -254,7 +258,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
             .map_err(|e| DebugProbeError::from(e).into())
     }
 
-    fn target_reset(&mut self) -> Result<(), DebugProbeError> {
+    async fn target_reset(&mut self) -> Result<(), DebugProbeError> {
         let mut buf = [0; 2];
         self.send_jtag_command(
             &[
@@ -270,7 +274,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         Ok(())
     }
 
-    fn target_reset_assert(&mut self) -> Result<(), DebugProbeError> {
+    async fn target_reset_assert(&mut self) -> Result<(), DebugProbeError> {
         let mut buf = [0; 2];
         self.send_jtag_command(
             &[
@@ -286,7 +290,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         Ok(())
     }
 
-    fn target_reset_deassert(&mut self) -> Result<(), DebugProbeError> {
+    async fn target_reset_deassert(&mut self) -> Result<(), DebugProbeError> {
         let mut buf = [0; 2];
         self.send_jtag_command(
             &[
@@ -302,7 +306,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
         Ok(())
     }
 
-    fn select_protocol(&mut self, protocol: WireProtocol) -> Result<(), DebugProbeError> {
+    async fn select_protocol(&mut self, protocol: WireProtocol) -> Result<(), DebugProbeError> {
         match protocol {
             WireProtocol::Jtag => self.protocol = WireProtocol::Jtag,
             WireProtocol::Swd => self.protocol = WireProtocol::Swd,
@@ -367,7 +371,7 @@ impl<D: StLinkUsb> Drop for StLink<D> {
 }
 
 impl StLink<StLinkUsbDevice> {
-    fn swj_pins(
+    async fn swj_pins(
         &mut self,
         pin_out: u32,
         pin_select: u32,
@@ -381,9 +385,9 @@ impl StLink<StLinkUsbDevice> {
         // If something else is selected return an error as this is not supported on ST-Links.
         if pin_select == nreset_mask {
             if Pins(pin_out as u8).nreset() {
-                self.target_reset_deassert()?;
+                self.target_reset_deassert().await?;
             } else {
-                self.target_reset_assert()?;
+                self.target_reset_assert().await?;
             }
 
             // Normally this would be the timeout we pass to the probe to settle the pins.

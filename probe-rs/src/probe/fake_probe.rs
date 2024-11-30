@@ -324,6 +324,7 @@ impl Default for FakeProbe {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for FakeProbe {
     /// Get human readable name for the probe
     fn get_name(&self) -> &str {

@@ -323,6 +323,7 @@ pub struct FtdiProbe {
     swd_settings: SwdSettings,
 }
 
+#[async_trait::async_trait(?Send)]
 impl DebugProbe for FtdiProbe {
     fn get_name(&self) -> &str {
         "FTDI"

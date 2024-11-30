@@ -98,7 +98,7 @@ impl fmt::Debug for ArchitectureInterface {
 }
 
 impl ArchitectureInterface {
-    fn attach<'probe, 'target: 'probe>(
+    async fn attach<'probe, 'target: 'probe>(
         &'probe mut self,
         target: &'probe Target,
         combined_state: &'probe mut CombinedCoreState,
@@ -107,7 +107,7 @@ impl ArchitectureInterface {
             ArchitectureInterface::Arm(interface) => combined_state.attach_arm(target, interface),
             ArchitectureInterface::Jtag(probe, ifaces) => {
                 let idx = combined_state.interface_idx();
-                probe.select_jtag_tap(idx)?;
+                probe.select_jtag_tap(idx).await?;
                 match &mut ifaces[idx] {
                     JtagInterface::Riscv(state) => {
                         let factory = probe.try_get_riscv_interface_builder()?;
@@ -131,13 +131,13 @@ impl ArchitectureInterface {
 
 impl Session {
     /// Open a new session with a given debug target.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         probe: Probe,
         target: TargetSelector,
         attach_method: AttachMethod,
         permissions: Permissions,
     ) -> Result<Self, Error> {
-        let (probe, target) = get_target_from_selector(target, attach_method, probe)?;
+        let (probe, target) = get_target_from_selector(target, attach_method, probe).await?;
 
         let cores = target
             .cores
@@ -154,9 +154,9 @@ impl Session {
             .collect();
 
         let mut session = if let Architecture::Arm = target.architecture() {
-            Self::attach_arm(probe, target, attach_method, permissions, cores)?
+            Self::attach_arm(probe, target, attach_method, permissions, cores).await?
         } else {
-            Self::attach_jtag(probe, target, attach_method, permissions, cores)?
+            Self::attach_jtag(probe, target, attach_method, permissions, cores).await?
         };
 
         session.clear_all_hw_breakpoints()?;
@@ -164,7 +164,7 @@ impl Session {
         Ok(session)
     }
 
-    fn attach_arm(
+    async fn attach_arm(
         mut probe: Probe,
         target: Target,
         attach_method: AttachMethod,
@@ -197,13 +197,13 @@ impl Session {
                     probe.get_name()
                 );
                 tracing::info!("Falling back to standard probe reset.");
-                probe.target_reset_assert()?;
+                probe.target_reset_assert().await?;
             }
         }
 
         if let Some(jtag) = target.jtag.as_ref() {
             if let Some(scan_chain) = jtag.scan_chain.clone() {
-                probe.set_scan_chain(scan_chain)?;
+                probe.set_scan_chain(scan_chain).await?;
             }
         }
         probe.attach_to_unspecified()?;
@@ -224,7 +224,7 @@ impl Session {
             Ok(()) => (),
             // In case this happens after unlock. Try to re-attach the probe once.
             Err(ArmError::ReAttachRequired) => {
-                Self::reattach_arm_interface(&mut interface, &sequence_handle)?;
+                Self::reattach_arm_interface(&mut interface, &sequence_handle).await?;
             }
             Err(e) => return Err(Error::Arm(e)),
         }
@@ -288,7 +288,7 @@ impl Session {
         }
     }
 
-    fn attach_jtag(
+    async fn attach_jtag(
         mut probe: Probe,
         target: Target,
         _attach_method: AttachMethod,
@@ -300,7 +300,7 @@ impl Session {
         // handle most of the setup in the same way.
         if let Some(jtag) = target.jtag.as_ref() {
             if let Some(scan_chain) = jtag.scan_chain.clone() {
-                probe.set_scan_chain(scan_chain)?;
+                probe.set_scan_chain(scan_chain).await;
             }
         }
 
@@ -338,7 +338,7 @@ impl Session {
                 ))));
             }
 
-            probe.select_jtag_tap(iface_idx)?;
+            probe.select_jtag_tap(iface_idx).await?;
 
             interfaces[iface_idx] = match core_arch {
                 Architecture::Riscv => {
@@ -388,7 +388,7 @@ impl Session {
 
             DebugSequence::Riscv(sequence) => {
                 for core_id in 0..session.cores.len() {
-                    sequence.on_connect(&mut session.get_riscv_interface(core_id)?)?;
+                    sequence.on_connect(&mut session.get_riscv_interface(core_id).await?)?;
                 }
             }
             _ => unreachable!("Other architectures should have already been handled"),
@@ -482,13 +482,13 @@ impl Session {
     //
     // By design, this is called frequently in a session, therefore we limit tracing level to "trace" to avoid spamming the logs.
     #[tracing::instrument(level = "trace", skip(self), name = "attach_to_core")]
-    pub fn core(&mut self, core_index: usize) -> Result<Core<'_>, Error> {
+    pub async fn core(&mut self, core_index: usize) -> Result<Core<'_>, Error> {
         let combined_state = self
             .cores
             .get_mut(core_index)
             .ok_or(Error::CoreNotFound(core_index))?;
 
-        match self.interfaces.attach(&self.target, combined_state) {
+        match self.interfaces.attach(&self.target, combined_state).await {
             Err(Error::Xtensa(XtensaError::CoreDisabled)) => {
                 // If the core is disabled, we can't attach to it.
                 // We can't do anything about it, so we just translate
@@ -553,13 +553,13 @@ impl Session {
     }
 
     /// Get the RISC-V probe interface.
-    pub fn get_riscv_interface(
+    pub async fn get_riscv_interface(
         &mut self,
         core_id: usize,
     ) -> Result<RiscvCommunicationInterface, Error> {
         let tap_idx = self.interface_idx(core_id)?;
         if let ArchitectureInterface::Jtag(probe, ifaces) = &mut self.interfaces {
-            probe.select_jtag_tap(tap_idx)?;
+            probe.select_jtag_tap(tap_idx).await?;
             if let JtagInterface::Riscv(state) = &mut ifaces[tap_idx] {
                 let factory = probe.try_get_riscv_interface_builder()?;
                 return Ok(factory.attach_auto(&self.target, state)?);
@@ -569,13 +569,13 @@ impl Session {
     }
 
     /// Get the Xtensa probe interface.
-    pub fn get_xtensa_interface(
+    pub async fn get_xtensa_interface(
         &mut self,
         core_id: usize,
     ) -> Result<XtensaCommunicationInterface, Error> {
         let tap_idx = self.interface_idx(core_id)?;
         if let ArchitectureInterface::Jtag(probe, ifaces) = &mut self.interfaces {
-            probe.select_jtag_tap(tap_idx)?;
+            probe.select_jtag_tap(tap_idx).await?;
             if let JtagInterface::Xtensa(state) = &mut ifaces[tap_idx] {
                 return Ok(probe.try_get_xtensa_interface(state)?);
             }
@@ -584,7 +584,7 @@ impl Session {
     }
 
     #[tracing::instrument(skip_all)]
-    fn reattach_arm_interface(
+    async fn reattach_arm_interface(
         interface: &mut Box<dyn ArmProbeInterface>,
         debug_sequence: &Arc<dyn ArmDebugSequence>,
     ) -> Result<(), Error> {
@@ -605,8 +605,8 @@ impl Session {
 
         tracing::debug!("Re-attaching Probe");
         let mut probe = tmp_interface.close();
-        probe.detach()?;
-        probe.attach_to_unspecified()?;
+        probe.detach().await?;
+        probe.attach_to_unspecified().await?;
 
         let new_interface = probe.try_into_arm_interface().map_err(|(_, err)| err)?;
 
@@ -637,7 +637,7 @@ impl Session {
     /// # Errors
     /// NotImplemented if no custom erase sequence exists
     /// Err(e) if the custom erase sequence failed
-    pub fn sequence_erase_all(&mut self) -> Result<(), Error> {
+    pub async fn sequence_erase_all(&mut self) -> Result<(), Error> {
         let ArchitectureInterface::Arm(ref mut interface) = self.interfaces else {
             return Err(Error::NotImplemented(
                 "Debug Erase Sequence is not implemented for non-ARM targets.",
@@ -659,7 +659,7 @@ impl Session {
             Ok(()) => (),
             // In case this happens after unlock. Try to re-attach the probe once.
             Err(ArmError::ReAttachRequired) => {
-                Self::reattach_arm_interface(interface, debug_sequence)?;
+                Self::reattach_arm_interface(interface, debug_sequence).await?;
                 // For re-setup debugging on all cores
                 for core_state in &self.cores {
                     core_state.enable_arm_debug(interface.deref_mut())?;
@@ -690,7 +690,7 @@ impl Session {
     }
 
     /// Configure the target and probe for serial wire view (SWV) tracing.
-    pub fn setup_tracing(
+    pub async fn setup_tracing(
         &mut self,
         core_index: usize,
         destination: TraceSink,
@@ -713,10 +713,10 @@ impl Session {
         // that on some architectures, the TPIU is configured to drive SWO.
         match destination {
             TraceSink::Swo(ref config) => {
-                interface.enable_swo(config)?;
+                interface.enable_swo(config).await?;
             }
             TraceSink::Tpiu(ref config) => {
-                interface.enable_swo(config)?;
+                interface.enable_swo(config).await?;
             }
             TraceSink::TraceMemory => {}
         }
@@ -731,8 +731,8 @@ impl Session {
 
     /// Configure the target to stop emitting SWV trace data.
     #[tracing::instrument(skip(self))]
-    pub fn disable_swv(&mut self, core_index: usize) -> Result<(), Error> {
-        crate::architecture::arm::component::disable_swv(&mut self.core(core_index)?)
+    pub async fn disable_swv(&mut self, core_index: usize) -> Result<(), Error> {
+        crate::architecture::arm::component::disable_swv(&mut self.core(core_index).await?)
     }
 
     /// Begin tracing a memory address over SWV.
@@ -769,21 +769,23 @@ impl Session {
     }
 
     /// Clears all hardware breakpoints on all cores
-    pub fn clear_all_hw_breakpoints(&mut self) -> Result<(), Error> {
+    pub async fn clear_all_hw_breakpoints(&mut self) -> Result<(), Error> {
         self.halted_access(|session| {
-            { 0..session.cores.len() }.try_for_each(|core| match session.core(core) {
-                Ok(mut core) => core.clear_all_hw_breakpoints(),
-                Err(Error::CoreDisabled(_)) => Ok(()),
-                Err(err) => Err(err),
-            })
+            for core in 0..session.cores.len() {
+                match session.core(core).await {
+                    Ok(mut core) => core.clear_all_hw_breakpoints().await,
+                    Err(Error::CoreDisabled(_)) => Ok(()),
+                    Err(err) => Err(err),
+                }
+            }
         })
     }
 
     /// Resume all cores
-    pub fn resume_all_cores(&mut self) -> Result<(), Error> {
+    pub async fn resume_all_cores(&mut self) -> Result<(), Error> {
         // Resume cores
         for core_id in 0..self.cores.len() {
-            match self.core(core_id) {
+            match self.core(core_id).await {
                 Ok(mut core) => {
                     if core.core_halted()? {
                         core.run()?;
@@ -816,13 +818,14 @@ impl Drop for Session {
         }
 
         // Call any necessary deconfiguration/shutdown hooks.
-        if let Err(err) = { 0..self.cores.len() }.try_for_each(|core| match self.core(core) {
-            Ok(mut core) => core.debug_core_stop(),
-            Err(Error::CoreDisabled(_)) => Ok(()),
-            Err(err) => Err(err),
-        }) {
-            tracing::warn!("Failed to deconfigure device during shutdown: {:?}", err);
-        }
+        // TODO:
+        // if let Err(err) = { 0..self.cores.len() }.try_for_each(|core| match self.core(core).await {
+        //     Ok(mut core) => core.debug_core_stop(),
+        //     Err(Error::CoreDisabled(_)) => Ok(()),
+        //     Err(err) => Err(err),
+        // }) {
+        //     tracing::warn!("Failed to deconfigure device during shutdown: {:?}", err);
+        // }
     }
 }
 
@@ -831,7 +834,7 @@ impl Drop for Session {
 /// If the selector is [TargetSelector::Unspecified], the target will be looked up in the registry.
 /// If it its [TargetSelector::Auto], probe-rs will try to determine the target automatically, based on
 /// information read from the chip.
-fn get_target_from_selector(
+async fn get_target_from_selector(
     target: TargetSelector,
     attach_method: AttachMethod,
     mut probe: Probe,
@@ -844,16 +847,16 @@ fn get_target_from_selector(
             // Thus, we try just using a normal reset for target detection if we want to do so under reset.
             // This can of course fail, but target detection is a best effort, not a guarantee!
             if AttachMethod::UnderReset == attach_method {
-                probe.target_reset_assert()?;
+                probe.target_reset_assert().await?;
             }
-            probe.attach_to_unspecified()?;
+            probe.attach_to_unspecified().await?;
 
             let (returned_probe, found_target) = crate::vendor::auto_determine_target(probe)?;
             probe = returned_probe;
 
             if AttachMethod::UnderReset == attach_method {
                 // Now we can deassert reset in case we asserted it before.
-                probe.target_reset_deassert()?;
+                probe.target_reset_deassert().await?;
             }
 
             if let Some(target) = found_target {
