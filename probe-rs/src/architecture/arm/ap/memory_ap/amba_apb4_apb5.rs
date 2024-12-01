@@ -42,6 +42,7 @@ impl AmbaApb4Apb5 {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl super::MemoryApType for AmbaApb4Apb5 {
     type CSW = CSW;
 

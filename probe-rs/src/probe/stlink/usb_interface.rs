@@ -67,6 +67,7 @@ impl std::fmt::Debug for StLinkUsbDevice {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 pub trait StLinkUsb: std::fmt::Debug {
     /// Writes to the probe and reads back data if needed.
     async fn write(
@@ -168,6 +169,7 @@ impl StLinkUsbDevice {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl StLinkUsb for StLinkUsbDevice {
     /// Writes to the out EP and reads back data if needed.
     /// First the `cmd` is sent.

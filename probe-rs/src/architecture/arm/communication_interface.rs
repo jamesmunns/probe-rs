@@ -68,7 +68,7 @@ impl RegisterParseError {
 }
 
 /// To be implemented by debug probe drivers that support debugging ARM cores.
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 pub trait ArmProbeInterface: DapAccess + SwdSequence + SwoAccess + Send {
     /// Returns a vector of all the access ports the current debug port has.
     ///
@@ -102,10 +102,10 @@ pub trait ArmProbeInterface: DapAccess + SwdSequence + SwoAccess + Send {
 #[async_trait::async_trait(?Send)]
 pub trait SwdSequence {
     /// Corresponds to the DAP_SWJ_Sequence function from the ARM Debug sequences
-    fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError>;
+    async fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError>;
 
     /// Corresponds to the DAP_SWJ_Pins function from the ARM Debug sequences
-    fn swj_pins(
+    async fn swj_pins(
         &mut self,
         pin_out: u32,
         pin_select: u32,
@@ -187,7 +187,7 @@ impl ArmDebugState for Initialized {
                 tracing::warn!("Failed to stop DP {:x?}", dp);
             }
         }
-        probe.raw_flush().ok();
+        probe.raw_flush().await.ok();
         drop(stop_span);
     }
 }
@@ -256,7 +256,7 @@ impl<S: ArmDebugState> ArmCommunicationInterface<S> {
 /// struct itself.
 pub trait DapProbe: RawDapAccess + DebugProbe {}
 
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 impl ArmProbeInterface for ArmCommunicationInterface<Initialized> {
     async fn memory_interface(
         &mut self,
@@ -290,20 +290,23 @@ impl ArmProbeInterface for ArmCommunicationInterface<Initialized> {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl<S: ArmDebugState> SwdSequence for ArmCommunicationInterface<S> {
-    fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError> {
-        self.probe_mut().swj_sequence(bit_len, bits)?;
+    async fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError> {
+        self.probe_mut().swj_sequence(bit_len, bits).await?;
 
         Ok(())
     }
 
-    fn swj_pins(
+    async fn swj_pins(
         &mut self,
         pin_out: u32,
         pin_select: u32,
         pin_wait: u32,
     ) -> Result<u32, DebugProbeError> {
-        self.probe_mut().swj_pins(pin_out, pin_select, pin_wait)
+        self.probe_mut()
+            .swj_pins(pin_out, pin_select, pin_wait)
+            .await
     }
 }
 
@@ -416,8 +419,8 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
     }
 
     /// Inform the probe of the [`CoreStatus`] of the chip attached to the probe.
-    pub fn core_status_notification(&mut self, state: CoreStatus) {
-        self.probe_mut().core_status_notification(state).ok();
+    pub async fn core_status_notification(&mut self, state: CoreStatus) {
+        self.probe_mut().core_status_notification(state).await.ok();
     }
 
     /// Tries to obtain a memory interface which can be used to read memory from ARM targets.
@@ -434,7 +437,7 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
             return Err(ArmError::ApDoesNotExist(access_port_address.clone()));
         }
 
-        let memory_interface = ADIMemoryInterface::new(self, access_port_address)?;
+        let memory_interface = ADIMemoryInterface::new(self, access_port_address).await?;
         Ok(Box::new(memory_interface))
     }
 
@@ -448,7 +451,7 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
 
             switched_dp = true;
 
-            self.probe_mut().raw_flush()?;
+            self.probe_mut().raw_flush().await?;
 
             // Try to switch to the new DP.
             if let Err(e) = sequence
@@ -479,19 +482,19 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
             // Make sure we enable the overrun detect mode when requested.
             // For "bit-banging" probes, such as JLink or FTDI, we rely on it for good, stable communication.
             // This is required as the default sequence (and most special implementations) does not do this.
-            let mut ctrl_reg: Ctrl = self.read_dp_register(dp)?;
+            let mut ctrl_reg: Ctrl = self.read_dp_register(dp).await?;
             if ctrl_reg.orun_detect() != self.state.use_overrun_detect {
                 tracing::debug!("Setting orun_detect: {}", self.state.use_overrun_detect);
                 // only write if there’s a need for it.
                 ctrl_reg.set_orun_detect(self.state.use_overrun_detect);
-                self.write_dp_register(dp, ctrl_reg)?;
+                self.write_dp_register(dp, ctrl_reg).await?;
             }
 
-            let idr: DebugPortId = self.read_dp_register::<DPIDR>(dp)?.into();
+            let idr: DebugPortId = self.read_dp_register::<DPIDR>(dp).await?.into();
             if idr.version == DebugPortVersion::DPv3 {
-                let idr1: DPIDR1 = self.read_dp_register(dp)?;
-                let base_ptr0: BASEPTR0 = self.read_dp_register(dp)?;
-                let base_ptr1: BASEPTR1 = self.read_dp_register(dp)?;
+                let idr1: DPIDR1 = self.read_dp_register(dp).await?;
+                let base_ptr0: BASEPTR0 = self.read_dp_register(dp).await?;
+                let base_ptr1: BASEPTR1 = self.read_dp_register(dp).await?;
                 let base_ptr_str = base_ptr0.valid().then(|| {
                     format!(
                         "0x{:x}",
@@ -561,7 +564,7 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
             select.set_ap_bank_sel(dp_state.current_apbanksel);
             select.set_dp_bank_sel(dp_state.current_dpbanksel);
 
-            self.write_dp_register(dp, select)?;
+            self.write_dp_register(dp, select).await?;
         }
 
         Ok(())
@@ -602,7 +605,7 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
             select.set_ap_bank_sel(dp_state.current_apbanksel);
             select.set_dp_bank_sel(dp_state.current_dpbanksel);
 
-            self.write_dp_register(ap.dp(), select)?;
+            self.write_dp_register(ap.dp(), select).await?;
         }
 
         Ok(())
@@ -610,29 +613,30 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
 }
 
 impl FlushableArmAccess for ArmCommunicationInterface<Initialized> {
-    fn flush(&mut self) -> Result<(), ArmError> {
-        self.probe_mut().raw_flush()
+    async fn flush(&mut self) -> Result<(), ArmError> {
+        self.probe_mut().raw_flush().await
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl SwoAccess for ArmCommunicationInterface<Initialized> {
-    fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError> {
+    async fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError> {
         match self.probe_mut().get_swo_interface_mut() {
-            Some(interface) => interface.enable_swo(config),
+            Some(interface) => interface.enable_swo(config).await,
             None => Err(ArmError::ArchitectureRequired(&["ARMv7", "ARMv8"])),
         }
     }
 
-    fn disable_swo(&mut self) -> Result<(), ArmError> {
+    async fn disable_swo(&mut self) -> Result<(), ArmError> {
         match self.probe_mut().get_swo_interface_mut() {
-            Some(interface) => interface.disable_swo(),
+            Some(interface) => interface.disable_swo().await,
             None => Err(ArmError::ArchitectureRequired(&["ARMv7", "ARMv8"])),
         }
     }
 
-    fn read_swo_timeout(&mut self, timeout: Duration) -> Result<Vec<u8>, ArmError> {
+    async fn read_swo_timeout(&mut self, timeout: Duration) -> Result<Vec<u8>, ArmError> {
         match self.probe_mut().get_swo_interface_mut() {
-            Some(interface) => interface.read_swo_timeout(timeout),
+            Some(interface) => interface.read_swo_timeout(timeout).await,
             None => Err(ArmError::ArchitectureRequired(&["ARMv7", "ARMv8"])),
         }
     }
@@ -644,7 +648,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
         self.select_dp_and_dp_bank(dp, address).await?;
         let result = self
             .probe_mut()
-            .raw_read_register(PortType::DebugPort, address & 0xf)?;
+            .raw_read_register(PortType::DebugPort, address & 0xf)
+            .await?;
         Ok(result)
     }
 
@@ -656,7 +661,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
     ) -> Result<(), ArmError> {
         self.select_dp_and_dp_bank(dp, address).await?;
         self.probe_mut()
-            .raw_write_register(PortType::DebugPort, address, value)?;
+            .raw_write_register(PortType::DebugPort, address, value)
+            .await?;
         Ok(())
     }
 
@@ -669,7 +675,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
 
         let result = self
             .probe_mut()
-            .raw_read_register(PortType::AccessPort, address & 0xf)?;
+            .raw_read_register(PortType::AccessPort, address & 0xf)
+            .await?;
 
         Ok(result)
     }
@@ -683,7 +690,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
         self.select_ap_and_ap_bank(ap, address).await?;
 
         self.probe_mut()
-            .raw_read_block(PortType::AccessPort, address, values)?;
+            .raw_read_block(PortType::AccessPort, address, values)
+            .await?;
         Ok(())
     }
 
@@ -696,7 +704,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
         self.select_ap_and_ap_bank(ap, address).await?;
 
         self.probe_mut()
-            .raw_write_register(PortType::AccessPort, address, value)?;
+            .raw_write_register(PortType::AccessPort, address, value)
+            .await?;
 
         Ok(())
     }
@@ -710,7 +719,8 @@ impl DapAccess for ArmCommunicationInterface<Initialized> {
         self.select_ap_and_ap_bank(ap, address).await?;
 
         self.probe_mut()
-            .raw_write_block(PortType::AccessPort, address, values)?;
+            .raw_write_block(PortType::AccessPort, address, values)
+            .await?;
         Ok(())
     }
 }
@@ -736,21 +746,21 @@ impl ArmCommunicationInterface<Initialized> {
         dp: DpAddress,
     ) -> Result<Option<ArmChipInfo>, ArmError> {
         // Check sticky error and cleanup if necessary
-        let ctrl_reg: crate::architecture::arm::dp::Ctrl = self.read_dp_register(dp)?;
+        let ctrl_reg: crate::architecture::arm::dp::Ctrl = self.read_dp_register(dp).await?;
 
         if ctrl_reg.sticky_err() {
             tracing::trace!("AP Search faulted. Cleaning up");
             let mut abort = Abort::default();
             abort.set_stkerrclr(true);
-            self.write_dp_register(dp, abort)?;
+            self.write_dp_register(dp, abort).await?;
         }
 
         let state = self.select_dp(dp).await?;
 
         for access_port in state.access_ports.clone() {
             if let Ok(mut memory) = self.memory_interface(&access_port).await {
-                let base_addr = memory.base_address()?;
-                let component = Component::try_parse(&mut *memory, base_addr)?;
+                let base_addr = memory.base_address().await?;
+                let component = Component::try_parse(&mut *memory, base_addr).await?;
                 if let Component::Class1RomTable(component_id, _) = component {
                     if let Some(jep106) = component_id.peripheral_id().jep106() {
                         return Ok(Some(ArmChipInfo {
@@ -789,5 +799,5 @@ impl std::fmt::Display for ArmChipInfo {
 /// A helper trait to get more specific interfaces.
 pub trait FlushableArmAccess {
     /// Flush all remaining commands if the target driver implements batching.
-    fn flush(&mut self) -> Result<(), ArmError>;
+    async fn flush(&mut self) -> Result<(), ArmError>;
 }

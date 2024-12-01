@@ -42,6 +42,7 @@ impl AmbaAxi3Axi4 {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl super::MemoryApType for AmbaAxi3Axi4 {
     type CSW = CSW;
 

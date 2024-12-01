@@ -34,11 +34,11 @@ where
     APA: ApAccess + DapAccess,
 {
     /// Creates a new MemoryInterface for given AccessPort.
-    pub fn new(
+    pub async fn new(
         interface: &'interface mut APA,
         access_port_address: &FullyQualifiedApAddress,
     ) -> Result<ADIMemoryInterface<'interface, APA>, ArmError> {
-        let memory_ap = MemoryAp::new(interface, access_port_address)?;
+        let memory_ap = MemoryAp::new(interface, access_port_address).await?;
         Ok(Self {
             interface,
             memory_ap,
@@ -48,16 +48,18 @@ where
 
 impl<APA> ADIMemoryInterface<'_, APA> where APA: ApAccess {}
 
+#[async_trait::async_trait(?Send)]
 impl<APA> SwdSequence for ADIMemoryInterface<'_, APA>
 where
     Self: ArmMemoryInterface,
 {
-    fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError> {
+    async fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError> {
         self.get_arm_communication_interface()?
             .swj_sequence(bit_len, bits)
+            .await
     }
 
-    fn swj_pins(
+    async fn swj_pins(
         &mut self,
         pin_out: u32,
         pin_select: u32,
@@ -65,9 +67,11 @@ where
     ) -> Result<u32, DebugProbeError> {
         self.get_arm_communication_interface()?
             .swj_pins(pin_out, pin_select, pin_wait)
+            .await
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl<AP> MemoryInterface<ArmError> for ADIMemoryInterface<'_, AP>
 where
     AP: FlushableArmAccess + ApAccess + DpAccess,
@@ -77,7 +81,7 @@ where
     /// The number of words read is `data.len()`.
     /// The address where the read should be performed at has to be a multiple of 8.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn read_64(&mut self, mut address: u64, mut data: &mut [u64]) -> Result<(), ArmError> {
+    async fn read_64(&mut self, mut address: u64, mut data: &mut [u64]) -> Result<(), ArmError> {
         if data.is_empty() {
             return Ok(());
         }
@@ -93,7 +97,9 @@ where
             true => DataSize::U64,
             false => DataSize::U32,
         };
-        self.memory_ap.try_set_datasize(self.interface, size)?;
+        self.memory_ap
+            .try_set_datasize(self.interface, size)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 8);
@@ -105,10 +111,12 @@ where
             );
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
 
             let mut buf = vec![0; chunk_size * 2];
-            self.memory_ap.read_data(self.interface, &mut buf)?;
+            self.memory_ap.read_data(self.interface, &mut buf).await?;
 
             for i in 0..chunk_size {
                 data[i] = buf[i * 2] as u64 | (buf[i * 2 + 1] as u64) << 32;
@@ -130,7 +138,7 @@ where
     /// The number of words read is `data.len()`.
     /// The address where the read should be performed at has to be a multiple of 4.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn read_32(&mut self, mut address: u64, mut data: &mut [u32]) -> Result<(), ArmError> {
+    async fn read_32(&mut self, mut address: u64, mut data: &mut [u32]) -> Result<(), ArmError> {
         if data.is_empty() {
             return Ok(());
         }
@@ -140,7 +148,8 @@ where
         }
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U32)?;
+            .try_set_datasize(self.interface, DataSize::U32)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 4);
@@ -152,9 +161,12 @@ where
             );
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
             self.memory_ap
-                .read_data(self.interface, &mut data[..chunk_size])?;
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap
+                .read_data(self.interface, &mut data[..chunk_size])
+                .await?;
 
             address = address
                 .checked_add(chunk_size as u64 * 4)
@@ -172,7 +184,7 @@ where
     /// The number of words read is `data.len()`.
     /// The address where the read should be performed at has to be a multiple of 2.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn read_16(&mut self, mut address: u64, mut data: &mut [u16]) -> Result<(), ArmError> {
+    async fn read_16(&mut self, mut address: u64, mut data: &mut [u16]) -> Result<(), ArmError> {
         if self.memory_ap.supports_only_32bit_data_size() {
             return Err(ArmError::UnsupportedTransferWidth(16));
         }
@@ -186,7 +198,8 @@ where
         }
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U16)?;
+            .try_set_datasize(self.interface, DataSize::U16)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 2);
@@ -200,8 +213,12 @@ where
             let mut values = vec![0; chunk_size];
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
-            self.memory_ap.read_data(self.interface, &mut values)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap
+                .read_data(self.interface, &mut values)
+                .await?;
 
             // The required shifting logic here is described in C2.2.6 Byte lanes of the ADI v5.2 specification.
             // All bytes are transfered in their lane, so when we do an access at an address that is not divisible by 4,
@@ -226,7 +243,7 @@ where
     /// Read a block of 8 bit words at `address`.
     ///
     /// The number of words read is `data.len()`.
-    fn read_8(&mut self, mut address: u64, mut data: &mut [u8]) -> Result<(), ArmError> {
+    async fn read_8(&mut self, mut address: u64, mut data: &mut [u8]) -> Result<(), ArmError> {
         if self.memory_ap.supports_only_32bit_data_size() {
             return Err(ArmError::UnsupportedTransferWidth(8));
         }
@@ -236,7 +253,8 @@ where
         }
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U8)?;
+            .try_set_datasize(self.interface, DataSize::U8)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address));
@@ -250,8 +268,12 @@ where
             let mut values = vec![0; chunk_size];
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
-            self.memory_ap.read_data(self.interface, &mut values)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap
+                .read_data(self.interface, &mut values)
+                .await?;
 
             // The required shifting logic here is described in C2.2.6 Byte lanes of the ADI v5.2 specification.
             // All bytes are transfered in their lane, so when we do an access at an address that is not divisible by 4,
@@ -273,11 +295,11 @@ where
         Ok(())
     }
 
-    fn read(&mut self, address: u64, data: &mut [u8]) -> Result<(), ArmError> {
+    async fn read(&mut self, address: u64, data: &mut [u8]) -> Result<(), ArmError> {
         let len = data.len();
         if address % 4 == 0 && len % 4 == 0 {
             let mut buffer = vec![0u32; len / 4];
-            self.read_32(address, &mut buffer)?;
+            self.read_32(address, &mut buffer).await?;
             for (bytes, value) in data.chunks_exact_mut(4).zip(buffer.iter()) {
                 bytes.copy_from_slice(&u32::to_le_bytes(*value));
             }
@@ -285,7 +307,7 @@ where
             let start_extra_count = (address % 4) as usize;
             let mut buffer = vec![0u32; (start_extra_count + len + 3) / 4];
             let read_address = address - start_extra_count as u64;
-            self.read_32(read_address, &mut buffer)?;
+            self.read_32(read_address, &mut buffer).await?;
             for (bytes, value) in data
                 .chunks_exact_mut(4)
                 .zip(buffer[start_extra_count..start_extra_count + len].iter())
@@ -301,7 +323,7 @@ where
     /// The number of words written is `data.len()`.
     /// The address where the write should be performed at has to be a multiple of 8.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn write_64(&mut self, mut address: u64, mut data: &[u64]) -> Result<(), ArmError> {
+    async fn write_64(&mut self, mut address: u64, mut data: &[u64]) -> Result<(), ArmError> {
         if (address % 8) != 0 {
             return Err(ArmError::alignment_error(address, 8));
         }
@@ -323,7 +345,9 @@ where
             true => DataSize::U64,
             false => DataSize::U32,
         };
-        self.memory_ap.try_set_datasize(self.interface, size)?;
+        self.memory_ap
+            .try_set_datasize(self.interface, size)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 8);
@@ -340,8 +364,10 @@ where
                 .collect();
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
-            self.memory_ap.write_data(self.interface, &values)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap.write_data(self.interface, &values).await?;
 
             address = address
                 .checked_add(chunk_size as u64 * 8)
@@ -359,7 +385,7 @@ where
     /// The number of words written is `data.len()`.
     /// The address where the write should be performed at has to be a multiple of 4.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn write_32(&mut self, mut address: u64, mut data: &[u32]) -> Result<(), ArmError> {
+    async fn write_32(&mut self, mut address: u64, mut data: &[u32]) -> Result<(), ArmError> {
         if (address % 4) != 0 {
             return Err(ArmError::alignment_error(address, 4));
         }
@@ -375,7 +401,8 @@ where
         );
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U32)?;
+            .try_set_datasize(self.interface, DataSize::U32)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 4);
@@ -387,9 +414,12 @@ where
             );
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
             self.memory_ap
-                .write_data(self.interface, &data[..chunk_size])?;
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap
+                .write_data(self.interface, &data[..chunk_size])
+                .await?;
 
             address = address
                 .checked_add(chunk_size as u64 * 4)
@@ -407,7 +437,7 @@ where
     /// The number of words written is `data.len()`.
     /// The address where the write should be performed at has to be a multiple of 2.
     /// Returns `ArmError::MemoryNotAligned` if this does not hold true.
-    fn write_16(&mut self, mut address: u64, mut data: &[u16]) -> Result<(), ArmError> {
+    async fn write_16(&mut self, mut address: u64, mut data: &[u16]) -> Result<(), ArmError> {
         if self.memory_ap.supports_only_32bit_data_size() {
             return Err(ArmError::UnsupportedTransferWidth(16));
         }
@@ -425,7 +455,8 @@ where
         );
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U16)?;
+            .try_set_datasize(self.interface, DataSize::U16)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address) / 2);
@@ -446,8 +477,10 @@ where
                 .collect::<Vec<_>>();
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
-            self.memory_ap.write_data(self.interface, &values)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap.write_data(self.interface, &values).await?;
 
             address = address
                 .checked_add(chunk_size as u64 * 2)
@@ -463,7 +496,7 @@ where
     /// Write a block of 8 bit words at `address`.
     ///
     /// The number of words written is `data.len()`.
-    fn write_8(&mut self, mut address: u64, mut data: &[u8]) -> Result<(), ArmError> {
+    async fn write_8(&mut self, mut address: u64, mut data: &[u8]) -> Result<(), ArmError> {
         if self.memory_ap.supports_only_32bit_data_size() {
             return Err(ArmError::UnsupportedTransferWidth(8));
         }
@@ -479,7 +512,8 @@ where
         );
 
         self.memory_ap
-            .try_set_datasize(self.interface, DataSize::U8)?;
+            .try_set_datasize(self.interface, DataSize::U8)
+            .await?;
 
         while !data.is_empty() {
             let chunk_size = data.len().min(autoincr_max_bytes(address));
@@ -500,8 +534,10 @@ where
                 .collect::<Vec<_>>();
 
             // autoincrement is limited to the 10 lowest bits, so write TAR every time.
-            self.memory_ap.set_target_address(self.interface, address)?;
-            self.memory_ap.write_data(self.interface, &values)?;
+            self.memory_ap
+                .set_target_address(self.interface, address)
+                .await?;
+            self.memory_ap.write_data(self.interface, &values).await?;
 
             address = address
                 .checked_add(chunk_size as u64)
@@ -515,27 +551,28 @@ where
     }
 
     /// Flushes any pending commands when the underlying probe interface implements command queuing.
-    fn flush(&mut self) -> Result<(), ArmError> {
-        self.interface.flush().map_err(Into::into)
+    async fn flush(&mut self) -> Result<(), ArmError> {
+        self.interface.flush().await.map_err(Into::into)
     }
 
     /// True if the memory ap supports 64 bit accesses which might be more efficient than issuing
     /// two 32bit transaction on the device’s memory bus.
-    fn supports_native_64bit_access(&mut self) -> bool {
+    async fn supports_native_64bit_access(&mut self) -> bool {
         self.memory_ap.has_large_data_extension()
     }
 
-    fn supports_8bit_transfers(&self) -> Result<bool, ArmError> {
+    async fn supports_8bit_transfers(&self) -> Result<bool, ArmError> {
         Ok(!self.memory_ap.supports_only_32bit_data_size())
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl<APA> ArmMemoryInterface for ADIMemoryInterface<'_, APA>
 where
     APA: std::any::Any + FlushableArmAccess + ApAccess + DpAccess,
 {
-    fn base_address(&mut self) -> Result<u64, ArmError> {
-        self.memory_ap.base_address(self.interface)
+    async fn base_address(&mut self) -> Result<u64, ArmError> {
+        self.memory_ap.base_address(self.interface).await
     }
 
     /// Returns the underlying [`MemoryAp`].
@@ -580,10 +617,12 @@ mod tests {
 
     impl<'interface> ADIMemoryInterface<'interface, MockMemoryAp> {
         /// Creates a new MemoryInterface for given AccessPort.
-        fn new_mock(
+        async fn new_mock(
             mock: &'interface mut MockMemoryAp,
         ) -> ADIMemoryInterface<'interface, MockMemoryAp> {
-            Self::new(mock, &FullyQualifiedApAddress::v1_with_default_dp(0)).unwrap()
+            Self::new(mock, &FullyQualifiedApAddress::v1_with_default_dp(0))
+                .await
+                .unwrap()
         }
 
         fn mock_memory(&self) -> &[u8] {
@@ -604,99 +643,104 @@ mod tests {
     // DATA8 interpreted as little endian 32-bit words
     const DATA32: &[u32] = &[0x83828180, 0x87868584, 0x8b8a8988, 0x8f8e8d8c];
 
-    #[test]
-    fn read_word_32() {
+    #[pollster::test]
+    async fn read_word_32() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..8].copy_from_slice(&DATA8[..8]);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [0, 4] {
-            let value = mi.read_word_32(address).expect("read_word_32 failed");
+            let value = mi.read_word_32(address).await.expect("read_word_32 failed");
             assert_eq!(value, DATA32[address as usize / 4]);
         }
     }
 
-    #[test]
-    fn read_word_16() {
+    #[pollster::test]
+    async fn read_word_16() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..8].copy_from_slice(&DATA8[..8]);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [0, 2, 4, 6] {
-            let value = mi.read_word_16(address).expect("read_word_16 failed");
+            let value = mi.read_word_16(address).await.expect("read_word_16 failed");
             assert_eq!(value, DATA16[address as usize / 2]);
         }
     }
 
-    #[test]
-    fn read_word_8() {
+    #[pollster::test]
+    async fn read_word_8() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..8].copy_from_slice(&DATA8[..8]);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in 0..8 {
             let value = mi
                 .read_word_8(address)
+                .await
                 .unwrap_or_else(|_| panic!("read_word_8 failed, address = {address}"));
             assert_eq!(value, DATA8[address as usize], "address = {address}");
         }
     }
 
-    #[test]
-    fn write_word_32() {
+    #[pollster::test]
+    async fn write_word_32() {
         for address in [0, 4] {
             let mut mock = MockMemoryAp::with_pattern_and_size(256);
-            let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+            let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
             let mut expected = Vec::from(mi.mock_memory());
             expected[address as usize..][..4].copy_from_slice(&DATA8[..4]);
 
             mi.write_word_32(address, DATA32[0])
+                .await
                 .unwrap_or_else(|_| panic!("write_word_32 failed, address = {address}"));
             assert_eq!(mi.mock_memory(), expected.as_slice(), "address = {address}");
         }
     }
 
-    #[test]
-    fn write_word_16() {
+    #[pollster::test]
+    async fn write_word_16() {
         for address in [0, 2, 4, 6] {
             let mut mock = MockMemoryAp::with_pattern_and_size(256);
-            let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+            let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
             let mut expected = Vec::from(mi.mock_memory());
             expected[address as usize..][..2].copy_from_slice(&DATA8[..2]);
 
             mi.write_word_16(address, DATA16[0])
+                .await
                 .unwrap_or_else(|_| panic!("write_word_32 failed, address = {address}"));
             assert_eq!(mi.mock_memory(), expected.as_slice(), "address = {address}");
         }
     }
 
-    #[test]
-    fn write_word_8() {
+    #[pollster::test]
+    async fn write_word_8() {
         for address in 0..8 {
             let mut mock = MockMemoryAp::with_pattern_and_size(256);
-            let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+            let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
             let mut expected = Vec::from(mi.mock_memory());
             expected[address] = DATA8[0];
 
             mi.write_word_8(address as u64, DATA8[0])
+                .await
                 .unwrap_or_else(|_| panic!("write_word_8 failed, address = {address}"));
             assert_eq!(mi.mock_memory(), expected.as_slice(), "address = {address}");
         }
     }
 
-    #[test]
-    fn read_32() {
+    #[pollster::test]
+    async fn read_32() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..DATA8.len()].copy_from_slice(DATA8);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [0, 4] {
             for len in 0..3 {
                 let mut data = vec![0u32; len];
                 mi.read_32(address, &mut data)
+                    .await
                     .unwrap_or_else(|_| panic!("read_32 failed, address = {address}, len = {len}"));
 
                 assert_eq!(
@@ -708,8 +752,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn read_32_big_chunk() {
+    #[pollster::test]
+    async fn read_32_big_chunk() {
         let mut mock = MockMemoryAp::with_pattern_and_size(4096);
         let expected: Vec<u32> = mock
             .memory
@@ -717,10 +761,11 @@ mod tests {
             .map(|b| b.pread(0).unwrap())
             .take(513)
             .collect();
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         let mut data = vec![0u32; 513];
         mi.read_32(0, &mut data)
+            .await
             .unwrap_or_else(|_| panic!("read_32 failed, address = {}, len = {}", 0, data.len()));
 
         assert_eq!(
@@ -732,26 +777,27 @@ mod tests {
         );
     }
 
-    #[test]
-    fn read_32_unaligned_should_error() {
+    #[pollster::test]
+    async fn read_32_unaligned_should_error() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [1, 3, 127] {
-            assert!(mi.read_32(address, &mut [0u32; 4]).is_err());
+            assert!(mi.read_32(address, &mut [0u32; 4]).await.is_err());
         }
     }
 
-    #[test]
-    fn read_16() {
+    #[pollster::test]
+    async fn read_16() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..DATA8.len()].copy_from_slice(DATA8);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [0, 2, 4, 6] {
             for len in 0..4 {
                 let mut data = vec![0u16; len];
                 mi.read_16(address, &mut data)
+                    .await
                     .unwrap_or_else(|_| panic!("read_16 failed, address = {address}, len = {len}"));
 
                 assert_eq!(
@@ -763,16 +809,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn read_8() {
+    #[pollster::test]
+    async fn read_8() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
         mock.memory[..DATA8.len()].copy_from_slice(DATA8);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in 0..4 {
             for len in 0..12 {
                 let mut data = vec![0u8; len];
                 mi.read_8(address, &mut data)
+                    .await
                     .unwrap_or_else(|_| panic!("read_8 failed, address = {address}, len = {len}"));
 
                 assert_eq!(
@@ -784,19 +831,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn write_32() {
+    #[pollster::test]
+    async fn write_32() {
         for address in [0, 4] {
             for len in 0..3 {
                 let mut mock = MockMemoryAp::with_pattern_and_size(256);
-                let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+                let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
                 let mut expected = Vec::from(mi.mock_memory());
                 expected[address as usize..(address as usize) + len * 4]
                     .copy_from_slice(&DATA8[..len * 4]);
 
                 let data = &DATA32[..len];
-                mi.write_32(address, data).unwrap_or_else(|_| {
+                mi.write_32(address, data).await.unwrap_or_else(|_| {
                     panic!("write_32 failed, address = {address}, len = {len}")
                 });
 
@@ -809,19 +856,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn write_16() {
+    #[pollster::test]
+    async fn write_16() {
         for address in [0, 2, 4, 6] {
             for len in 0..3 {
                 let mut mock = MockMemoryAp::with_pattern_and_size(256);
-                let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+                let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
                 let mut expected = Vec::from(mi.mock_memory());
                 expected[address as usize..(address as usize) + len * 2]
                     .copy_from_slice(&DATA8[..len * 2]);
 
                 let data = &DATA16[..len];
-                mi.write_16(address, data).unwrap_or_else(|_| {
+                mi.write_16(address, data).await.unwrap_or_else(|_| {
                     panic!("write_16 failed, address = {address}, len = {len}")
                 });
 
@@ -834,28 +881,32 @@ mod tests {
         }
     }
 
-    #[test]
-    fn write_block_u32_unaligned_should_error() {
+    #[pollster::test]
+    async fn write_block_u32_unaligned_should_error() {
         let mut mock = MockMemoryAp::with_pattern_and_size(256);
-        let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+        let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
         for address in [1, 3, 127] {
-            assert!(mi.write_32(address, &[0xDEAD_BEEF, 0xABBA_BABE]).is_err());
+            assert!(mi
+                .write_32(address, &[0xDEAD_BEEF, 0xABBA_BABE])
+                .await
+                .is_err());
         }
     }
 
-    #[test]
-    fn write_8() {
+    #[pollster::test]
+    async fn write_8() {
         for address in 0..4 {
             for len in 0..12 {
                 let mut mock = MockMemoryAp::with_pattern_and_size(256);
-                let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+                let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
                 let mut expected = Vec::from(mi.mock_memory());
                 expected[address as usize..(address as usize) + len].copy_from_slice(&DATA8[..len]);
 
                 let data = &DATA8[..len];
                 mi.write_8(address, data)
+                    .await
                     .unwrap_or_else(|_| panic!("write_8 failed, address = {address}, len = {len}"));
 
                 assert_eq!(
@@ -867,18 +918,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn write() {
+    #[pollster::test]
+    async fn write() {
         for address in 0..4 {
             for len in 0..12 {
                 let mut mock = MockMemoryAp::with_pattern_and_size(256);
-                let mut mi = ADIMemoryInterface::new_mock(&mut mock);
+                let mut mi = ADIMemoryInterface::new_mock(&mut mock).await;
 
                 let mut expected = Vec::from(mi.mock_memory());
                 expected[address as usize..(address as usize) + len].copy_from_slice(&DATA8[..len]);
 
                 let data = &DATA8[..len];
                 mi.write(address, data)
+                    .await
                     .unwrap_or_else(|_| panic!("write failed, address = {address}, len = {len}"));
 
                 assert_eq!(

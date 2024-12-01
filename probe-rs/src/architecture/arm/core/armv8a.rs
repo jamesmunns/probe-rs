@@ -1923,6 +1923,7 @@ mod test {
         }
     }
 
+    #[async_trait::async_trait(?Send)]
     impl ArmMemoryInterface for MockProbe {
         fn update_core_status(&mut self, _: CoreStatus) {}
 
@@ -1957,17 +1958,18 @@ mod test {
             todo!()
         }
 
-        fn base_address(&mut self) -> Result<u64, ArmError> {
+        async fn base_address(&mut self) -> Result<u64, ArmError> {
             todo!()
         }
     }
 
+    #[async_trait::async_trait(?Send)]
     impl SwdSequence for MockProbe {
-        fn swj_sequence(&mut self, _bit_len: u8, _bits: u64) -> Result<(), DebugProbeError> {
+        async fn swj_sequence(&mut self, _bit_len: u8, _bits: u64) -> Result<(), DebugProbeError> {
             todo!()
         }
 
-        fn swj_pins(
+        async fn swj_pins(
             &mut self,
             _pin_out: u32,
             _pin_select: u32,

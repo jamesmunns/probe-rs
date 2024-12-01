@@ -118,7 +118,7 @@ pub trait CoreInterface: MemoryInterface + CoreMemoryInterfaceShim {
     fn hw_breakpoints_enabled(&self) -> bool;
 
     /// Configure the target to ensure software breakpoints will enter Debug Mode.
-    fn debug_on_sw_breakpoint(&mut self, _enabled: bool) -> Result<(), Error> {
+    async fn debug_on_sw_breakpoint(&mut self, _enabled: bool) -> Result<(), Error> {
         // This default will have override methods for architectures that require special behavior, e.g. RISC-V.
         Ok(())
     }
@@ -137,7 +137,7 @@ pub trait CoreInterface: MemoryInterface + CoreMemoryInterfaceShim {
     /// Determine if an FPU is present.
     /// This must be queried while halted as this is a runtime
     /// decision for some core types.
-    fn fpu_support(&mut self) -> Result<bool, Error>;
+    async fn fpu_support(&mut self) -> Result<bool, Error>;
 
     /// Determine the number of floating point registers.
     /// This must be queried while halted as this is a runtime
@@ -407,8 +407,8 @@ impl<'probe> Core<'probe> {
 
     /// Configure the debug module to ensure software breakpoints will enter Debug Mode.
     #[tracing::instrument(skip(self))]
-    pub fn debug_on_sw_breakpoint(&mut self, enabled: bool) -> Result<(), Error> {
-        self.inner.debug_on_sw_breakpoint(enabled)
+    pub async fn debug_on_sw_breakpoint(&mut self, enabled: bool) -> Result<(), Error> {
+        self.inner.debug_on_sw_breakpoint(enabled).await
     }
 
     /// Returns a list of all the registers of this core.
@@ -551,8 +551,8 @@ impl<'probe> Core<'probe> {
     /// Determine if an FPU is present.
     /// This must be queried while halted as this is a runtime
     /// decision for some core types.
-    pub fn fpu_support(&mut self) -> Result<bool, Error> {
-        self.inner.fpu_support()
+    pub async fn fpu_support(&mut self) -> Result<bool, Error> {
+        self.inner.fpu_support().await
     }
 
     /// Determine the number of floating point registers.
@@ -697,11 +697,11 @@ impl<'probe> CoreInterface for Core<'probe> {
     }
 
     async fn instruction_set(&mut self) -> Result<InstructionSet, Error> {
-        self.instruction_set()
+        self.instruction_set().await
     }
 
-    fn fpu_support(&mut self) -> Result<bool, Error> {
-        self.fpu_support()
+    async fn fpu_support(&mut self) -> Result<bool, Error> {
+        self.fpu_support().await
     }
 
     fn floating_point_register_count(&mut self) -> Result<usize, crate::error::Error> {

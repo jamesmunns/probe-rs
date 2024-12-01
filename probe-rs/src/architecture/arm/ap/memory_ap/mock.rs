@@ -51,7 +51,7 @@ impl MockMemoryAp {
 }
 
 impl FlushableArmAccess for MockMemoryAp {
-    fn flush(&mut self) -> Result<(), ArmError> {
+    async fn flush(&mut self) -> Result<(), ArmError> {
         Ok(())
     }
 }

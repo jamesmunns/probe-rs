@@ -108,19 +108,19 @@ impl SwoConfig {
 }
 
 /// An interface to operate SWO to be implemented on drivers that support SWO.
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 pub trait SwoAccess {
     /// Configure a SwoAccess interface for reading SWO data.
-    fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError>;
+    async fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError>;
 
     /// Disable SWO reading on this SwoAccess interface.
-    fn disable_swo(&mut self) -> Result<(), ArmError>;
+    async fn disable_swo(&mut self) -> Result<(), ArmError>;
 
     /// Read any available SWO data without waiting.
     ///
     /// Returns a `Vec<u8>` of received SWO bytes since the last `read_swo()` call.
     /// If no data was available, returns an empty Vec.
-    fn read_swo(&mut self) -> Result<Vec<u8>, ArmError> {
+    async fn read_swo(&mut self) -> Result<Vec<u8>, ArmError> {
         self.read_swo_timeout(Duration::from_millis(10))
     }
 
@@ -128,7 +128,7 @@ pub trait SwoAccess {
     ///
     /// If no data is received before the timeout, returns an empty Vec.
     /// May return earlier than `timeout` if the receive buffer fills up.
-    fn read_swo_timeout(&mut self, timeout: Duration) -> Result<Vec<u8>, ArmError>;
+    async fn read_swo_timeout(&mut self, timeout: Duration) -> Result<Vec<u8>, ArmError>;
 
     /// Request an estimated best time to wait between polls of `read_swo`.
     ///
@@ -139,7 +139,7 @@ pub trait SwoAccess {
     ///
     /// The default implementation computes an estimated interval based on the buffer
     /// size, mode, and baud rate.
-    fn swo_poll_interval_hint(&mut self, config: &SwoConfig) -> Option<Duration> {
+    async fn swo_poll_interval_hint(&mut self, config: &SwoConfig) -> Option<Duration> {
         match self.swo_buffer_size() {
             Some(size) => poll_interval_from_buf_size(config, size),
             None => None,

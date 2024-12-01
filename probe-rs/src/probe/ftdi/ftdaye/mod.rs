@@ -165,7 +165,7 @@ impl FtdiContext {
         Ok(())
     }
 
-    fn read_data(&mut self, mut data: &mut [u8]) -> io::Result<usize> {
+    async fn read_data(&mut self, mut data: &mut [u8]) -> io::Result<usize> {
         let mut total = 0;
         while !data.is_empty() {
             // Move data out of the read queue
@@ -179,11 +179,14 @@ impl FtdiContext {
 
             // Read from USB
             if !data.is_empty() {
-                let read = self.handle.read_bulk(
-                    self.interface.read_ep(),
-                    &mut self.read_buffer,
-                    self.usb_read_timeout,
-                )?;
+                let read = self
+                    .handle
+                    .read_bulk(
+                        self.interface.read_ep(),
+                        &mut self.read_buffer,
+                        self.usb_read_timeout,
+                    )
+                    .await?;
 
                 tracing::debug!("Read {:02x?} bytes from USB", &self.read_buffer[..read]);
 
@@ -219,12 +222,13 @@ impl FtdiContext {
         Ok(total)
     }
 
-    fn write_data(&mut self, data: &[u8]) -> io::Result<usize> {
+    async fn write_data(&mut self, data: &[u8]) -> io::Result<usize> {
         let mut total = 0;
         for chunk in data.chunks(self.max_packet_size) {
-            total +=
-                self.handle
-                    .write_bulk(self.interface.write_ep(), chunk, self.usb_write_timeout)?;
+            total += self
+                .handle
+                .write_bulk(self.interface.write_ep(), chunk, self.usb_write_timeout)
+                .await?;
         }
 
         tracing::debug!("wrote {} bytes", total);
@@ -499,13 +503,13 @@ impl Device {
 
 impl Read for Device {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.context.read_data(buf)
+        self.context.read_data(buf).await
     }
 }
 
 impl Write for Device {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.context.write_data(buf)
+        self.context.write_data(buf).await
     }
 
     fn flush(&mut self) -> io::Result<()> {

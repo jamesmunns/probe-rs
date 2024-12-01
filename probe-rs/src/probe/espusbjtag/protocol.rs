@@ -232,26 +232,27 @@ impl ProtocolHandler {
         // We need to flush the device's response buffer, but we don't always succeed in doing so.
         // This nonsense if supposed to help us recover from some errors.
         // Not bulletproof, but significantly reduces error rate.
-        let flush_ep = |this: &mut Self| {
+        let flush_ep = |this: &mut Self| async {
             let mut incoming = [0; IN_EP_BUFFER_SIZE];
             this.device_handle
                 .read_bulk(this.ep_in, &mut incoming, Duration::from_millis(100))
+                .await
                 .is_ok()
         };
 
-        if flush_ep(&mut this) {
-            while flush_ep(&mut this) {}
+        if flush_ep(&mut this).await {
+            while flush_ep(&mut this).await {}
         } else {
             // Just returning here would end us up with Invalid IDCODE.
             for _ in 0..16 {
-                this.shift_bit(true, true, false).unwrap();
+                this.shift_bit(true, true, false).await.unwrap();
             }
 
-            this.flush().unwrap();
+            this.flush().await.unwrap();
             this.response.clear();
 
-            if flush_ep(&mut this) {
-                while flush_ep(&mut this) {}
+            if flush_ep(&mut this).await {
+                while flush_ep(&mut this).await {}
             }
         }
 
@@ -262,7 +263,12 @@ impl ProtocolHandler {
     /// to receive the bytes from this operations call [`ProtocolHandler::flush`]
     ///
     /// Note that if the internal buffer is exceeded bytes will be automatically flushed to usb device
-    pub fn shift_bit(&mut self, tms: bool, tdi: bool, cap: bool) -> Result<(), DebugProbeError> {
+    pub async fn shift_bit(
+        &mut self,
+        tms: bool,
+        tdi: bool,
+        cap: bool,
+    ) -> Result<(), DebugProbeError> {
         if cap && self.pending_in_bits == 128 * 8 {
             // From the ESP32-S3 TRM:
             // [A] command stream can cause at most 128 bytes of capture data to be
@@ -273,27 +279,28 @@ impl ProtocolHandler {
             // Let's break the command stream here and flush the data.
             // We do this before we would capture the 1025th bit, so we don't do an
             // extra flush if we only ever want to capture 1024 bits.
-            self.finalize_previous_command()?;
-            self.send_buffer()?;
-            self.receive_buffer()?;
+            self.finalize_previous_command().await?;
+            self.send_buffer().await?;
+            self.receive_buffer().await?;
         }
 
-        self.push_command(RepeatableCommand::Clock { cap, tdi, tms })?;
+        self.push_command(RepeatableCommand::Clock { cap, tdi, tms })
+            .await?;
 
         Ok(())
     }
 
     /// Sets the system reset signal on the target.
-    pub fn set_reset(&mut self, srst: bool) -> Result<(), DebugProbeError> {
-        self.finalize_previous_command()?;
-        self.add_raw_command(Command::Reset(srst))?;
-        self.flush()?;
+    pub async fn set_reset(&mut self, srst: bool) -> Result<(), DebugProbeError> {
+        self.finalize_previous_command().await?;
+        self.add_raw_command(Command::Reset(srst)).await?;
+        self.flush().await?;
         Ok(())
     }
 
     /// Adds a command to the command queue.
     /// This will properly add repeat commands if possible.
-    fn push_command(&mut self, command: RepeatableCommand) -> Result<(), DebugProbeError> {
+    async fn push_command(&mut self, command: RepeatableCommand) -> Result<(), DebugProbeError> {
         if let Some((command_in_queue, ref mut repetitions)) = self.command_queue {
             if command == command_in_queue && *repetitions < MAX_COMMAND_REPETITIONS {
                 *repetitions += 1;
@@ -301,7 +308,7 @@ impl ProtocolHandler {
             }
 
             let repetitions = *repetitions;
-            self.write_stream(command_in_queue, repetitions)?;
+            self.write_stream(command_in_queue, repetitions).await?;
         }
 
         self.command_queue = Some((command, 0));
@@ -309,9 +316,9 @@ impl ProtocolHandler {
         Ok(())
     }
 
-    fn finalize_previous_command(&mut self) -> Result<(), DebugProbeError> {
+    async fn finalize_previous_command(&mut self) -> Result<(), DebugProbeError> {
         if let Some((command_in_queue, repetitions)) = self.command_queue.take() {
-            self.write_stream(command_in_queue, repetitions)?;
+            self.write_stream(command_in_queue, repetitions).await?;
         }
 
         Ok(())
@@ -320,18 +327,18 @@ impl ProtocolHandler {
     /// Flushes pending commands and reads the captured bits from the target.
     ///
     /// The captured bits will be stored in the response buffer.
-    pub(super) fn flush(&mut self) -> Result<(), DebugProbeError> {
-        self.finalize_previous_command()?;
+    pub(super) async fn flush(&mut self) -> Result<(), DebugProbeError> {
+        self.finalize_previous_command().await?;
 
         // Only flush if we have anything to do.
         if !self.output_buffer.is_empty() || self.pending_in_bits != 0 {
             tracing::debug!("Flushing ...");
 
-            self.add_raw_command(Command::Flush)?;
-            self.send_buffer()?;
+            self.add_raw_command(Command::Flush).await?;
+            self.send_buffer().await?;
 
             while self.pending_in_bits != 0 {
-                self.receive_buffer()?;
+                self.receive_buffer().await?;
             }
         }
 
@@ -342,15 +349,15 @@ impl ProtocolHandler {
     ///
     /// This method returns the response buffer and clears it. The returned buffer will contain
     /// all bits captured since the last call to `read_captured_bits`.
-    pub(super) fn read_captured_bits(&mut self) -> Result<BitVec<u8, Lsb0>, DebugProbeError> {
-        self.flush()?;
+    pub(super) async fn read_captured_bits(&mut self) -> Result<BitVec<u8, Lsb0>, DebugProbeError> {
+        self.flush().await?;
 
         Ok(std::mem::take(&mut self.response))
     }
 
     /// Writes a command one or multiple times into the raw buffer we send to the USB EP later
     /// or if the out buffer reaches a limit of `OUT_BUFFER_SIZE`.
-    fn write_stream(
+    async fn write_stream(
         &mut self,
         command: RepeatableCommand,
         repetitions: usize,
@@ -360,12 +367,12 @@ impl ProtocolHandler {
         // If the repeated sequence would overflow the buffer, we flush first. This is a bit more
         // conservative than necessary, but it's simpler than alternatives.
         if command.captures() && self.pending_in_bits + repetitions + 1 > 128 * 8 {
-            self.send_buffer()?;
+            self.send_buffer().await?;
         }
 
         // Send the actual command.
-        self.add_raw_command(command.into())?;
-        self.add_repetitions(repetitions)?;
+        self.add_raw_command(command.into()).await?;
+        self.add_repetitions(repetitions).await?;
 
         if command.captures() {
             // Only increment pending bits if a whole command is in the buffer.
@@ -376,7 +383,7 @@ impl ProtocolHandler {
     }
 
     /// Adds the required number of repetitions to the output buffer.
-    fn add_repetitions(&mut self, mut repetitions: usize) -> Result<(), DebugProbeError> {
+    async fn add_repetitions(&mut self, mut repetitions: usize) -> Result<(), DebugProbeError> {
         // Send repetitions as many times as required.
         // We only send 2 bits with each repetition command as per the protocol.
         //
@@ -385,7 +392,8 @@ impl ProtocolHandler {
         // calculated as `repeat_count x 4^cmd_rep_count`. This sounds complicated but essentially
         // we just have to shift in the repetition counter 2 bits at a time.
         while repetitions > 0 {
-            self.add_raw_command(Command::Repeat((repetitions & 3) as u8))?;
+            self.add_raw_command(Command::Repeat((repetitions & 3) as u8))
+                .await?;
             repetitions >>= 2;
         }
 
@@ -393,10 +401,10 @@ impl ProtocolHandler {
     }
 
     /// Adds a single command to the output buffer and writes it to the USB EP if the buffer reaches a limit of `OUT_BUFFER_SIZE`.
-    fn add_raw_command(&mut self, command: Command) -> Result<(), DebugProbeError> {
+    async fn add_raw_command(&mut self, command: Command) -> Result<(), DebugProbeError> {
         // If we reach a maximal size of the output buffer, we flush.
         if self.output_buffer.len() == OUT_BUFFER_SIZE {
-            self.send_buffer()?;
+            self.send_buffer().await?;
         }
         self.output_buffer.push(command);
 
@@ -404,7 +412,7 @@ impl ProtocolHandler {
     }
 
     /// Sends the commands stored in the output buffer to the USB EP.
-    fn send_buffer(&mut self) -> Result<(), DebugProbeError> {
+    async fn send_buffer(&mut self) -> Result<(), DebugProbeError> {
         assert!(
             self.output_buffer.len() <= OUT_BUFFER_SIZE,
             "Output buffer too large: {} elements, max {OUT_BUFFER_SIZE}",
@@ -446,6 +454,7 @@ impl ProtocolHandler {
             let bytes = self
                 .device_handle
                 .write_bulk(self.ep_out, commands, USB_TIMEOUT)
+                .await
                 .map_err(DebugProbeError::Usb)?;
 
             commands = &commands[bytes..];
@@ -456,14 +465,14 @@ impl ProtocolHandler {
 
         // If there's more than a bufferful of data queing up in the jtag adapters IN endpoint, empty all but one buffer.
         while self.pending_in_bits > (IN_EP_BUFFER_SIZE + HW_FIFO_SIZE) * 8 {
-            self.receive_buffer()?;
+            self.receive_buffer().await?;
         }
 
         Ok(())
     }
 
     /// Tries to receive pending in bits from the USB EP.
-    fn receive_buffer(&mut self) -> Result<(), DebugProbeError> {
+    async fn receive_buffer(&mut self) -> Result<(), DebugProbeError> {
         tracing::trace!("Receiving buffer, pending bits: {}", self.pending_in_bits);
 
         if self.pending_in_bits == 0 {
@@ -475,7 +484,7 @@ impl ProtocolHandler {
 
         let read_bytes = self
             .device_handle
-            .read_bulk(self.ep_in, &mut incoming, USB_TIMEOUT)
+            .read_bulk(self.ep_in, &mut incoming, USB_TIMEOUT).await
             .map_err(|e| {
                 tracing::warn!(
                     "Something went wrong in read_bulk {:?} when trying to read {}bytes - pending_in_bits: {}",

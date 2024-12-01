@@ -52,6 +52,7 @@ macro_rules! attached_regs_to_mem_ap {
     };
 }
 
+#[async_trait::async_trait(?Send)]
 pub trait MemoryApType:
     ApRegAccess<BASE> + ApRegAccess<BASE2> + ApRegAccess<TAR> + ApRegAccess<TAR2> + ApRegAccess<DRW>
 {
@@ -239,6 +240,7 @@ impl AccessPortType for MemoryAp {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl MemoryApType for MemoryAp {
     type CSW = registers::CSW;
 

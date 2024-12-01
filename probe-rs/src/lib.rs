@@ -78,7 +78,7 @@ pub mod vendor;
 mod core;
 #[cfg(feature = "debug")]
 #[cfg_attr(probers_docsrs, doc(cfg(feature = "debug")))]
-pub mod debug;
+// pub mod debug;
 mod error;
 pub mod flashing;
 #[cfg(feature = "gdb-server")]
@@ -106,8 +106,8 @@ pub use crate::session::{Permissions, Session};
 #[cfg(feature = "debug")]
 pub use crate::core::dump::{CoreDump, CoreDumpError};
 
-#[cfg(feature = "debug")]
-pub use crate::debug::exception_handling::exception_handler_for_core;
+// #[cfg(feature = "debug")]
+// pub use crate::debug::exception_handling::exception_handler_for_core;
 
 #[doc = include_str!("../../README.md")]
 #[cfg(doctest)]

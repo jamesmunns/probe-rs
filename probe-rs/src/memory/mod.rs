@@ -47,7 +47,8 @@ where
     /// Returns `AccessPortError::MemoryNotAligned` if this does not hold true.
     async fn read_word_64(&mut self, address: u64) -> Result<u64, ERR> {
         let mut word = 0;
-        self.read_64(address, std::slice::from_mut(&mut word))?;
+        self.read_64(address, std::slice::from_mut(&mut word))
+            .await?;
         Ok(word)
     }
 
@@ -57,7 +58,8 @@ where
     /// Returns [`Error::MemoryNotAligned`] if this does not hold true.
     async fn read_word_32(&mut self, address: u64) -> Result<u32, ERR> {
         let mut word = 0;
-        self.read_32(address, std::slice::from_mut(&mut word))?;
+        self.read_32(address, std::slice::from_mut(&mut word))
+            .await?;
         Ok(word)
     }
 
@@ -67,14 +69,16 @@ where
     /// Returns [`Error::MemoryNotAligned`] if this does not hold true.
     async fn read_word_16(&mut self, address: u64) -> Result<u16, ERR> {
         let mut word = 0;
-        self.read_16(address, std::slice::from_mut(&mut word))?;
+        self.read_16(address, std::slice::from_mut(&mut word))
+            .await?;
         Ok(word)
     }
 
     /// Read an 8bit word of at `address`.
     async fn read_word_8(&mut self, address: u64) -> Result<u8, ERR> {
         let mut word = 0;
-        self.read_8(address, std::slice::from_mut(&mut word))?;
+        self.read_8(address, std::slice::from_mut(&mut word))
+            .await?;
         Ok(word)
     }
 
@@ -115,7 +119,7 @@ where
             return Err(InvalidDataLengthError::new("read_mem_64bit", 8).into());
         }
         let mut buffer = vec![0u64; data.len() / 8];
-        self.read_64(address, &mut buffer)?;
+        self.read_64(address, &mut buffer).await?;
         for (bytes, value) in data.chunks_exact_mut(8).zip(buffer.iter()) {
             bytes.copy_from_slice(&u64::to_le_bytes(*value));
         }
@@ -135,7 +139,7 @@ where
             return Err(InvalidDataLengthError::new("read_mem_32bit", 4).into());
         }
         let mut buffer = vec![0u32; data.len() / 4];
-        self.read_32(address, &mut buffer)?;
+        self.read_32(address, &mut buffer).await?;
         for (bytes, value) in data.chunks_exact_mut(4).zip(buffer.iter()) {
             bytes.copy_from_slice(&u32::to_le_bytes(*value));
         }
@@ -153,16 +157,17 @@ where
     ///
     ///  Generally faster than `read_8`.
     async fn read(&mut self, address: u64, data: &mut [u8]) -> Result<(), ERR> {
-        if self.supports_native_64bit_access() {
+        if self.supports_native_64bit_access().await {
             // Avoid heap allocation and copy if we don't need it.
-            self.read_8(address, data)?;
+            self.read_8(address, data).await?;
         } else if address % 4 == 0 && data.len() % 4 == 0 {
             // Avoid heap allocation and copy if we don't need it.
-            self.read_mem_32bit(address, data)?;
+            self.read_mem_32bit(address, data).await?;
         } else {
             let start_extra_count = (address % 4) as usize;
             let mut buffer = vec![0u8; (start_extra_count + data.len() + 3) / 4 * 4];
-            self.read_mem_32bit(address - start_extra_count as u64, &mut buffer)?;
+            self.read_mem_32bit(address - start_extra_count as u64, &mut buffer)
+                .await?;
             data.copy_from_slice(&buffer[start_extra_count..start_extra_count + data.len()]);
         }
         Ok(())
@@ -173,7 +178,7 @@ where
     /// The address where the write should be performed at has to be a multiple of 8.
     /// Returns [`Error::MemoryNotAligned`] if this does not hold true.
     async fn write_word_64(&mut self, address: u64, data: u64) -> Result<(), ERR> {
-        self.write_64(address, std::slice::from_ref(&data))
+        self.write_64(address, std::slice::from_ref(&data)).await
     }
 
     /// Write a 32bit word at `address`.
@@ -181,7 +186,7 @@ where
     /// The address where the write should be performed at has to be a multiple of 4.
     /// Returns [`Error::MemoryNotAligned`] if this does not hold true.
     async fn write_word_32(&mut self, address: u64, data: u32) -> Result<(), ERR> {
-        self.write_32(address, std::slice::from_ref(&data))
+        self.write_32(address, std::slice::from_ref(&data)).await
     }
 
     /// Write a 16bit word at `address`.
@@ -189,12 +194,12 @@ where
     /// The address where the write should be performed at has to be a multiple of 2.
     /// Returns [`Error::MemoryNotAligned`] if this does not hold true.
     async fn write_word_16(&mut self, address: u64, data: u16) -> Result<(), ERR> {
-        self.write_16(address, std::slice::from_ref(&data))
+        self.write_16(address, std::slice::from_ref(&data)).await
     }
 
     /// Write an 8bit word at `address`.
     async fn write_word_8(&mut self, address: u64, data: u8) -> Result<(), ERR> {
-        self.write_8(address, std::slice::from_ref(&data))
+        self.write_8(address, std::slice::from_ref(&data)).await
     }
 
     /// Write a block of 64bit words at `address`.
@@ -238,7 +243,7 @@ where
                 .expect("an u64 - this is a bug, please report it");
         }
 
-        self.write_64(address, &buffer)?;
+        self.write_64(address, &buffer).await?;
         Ok(())
     }
 
@@ -259,7 +264,7 @@ where
                 .expect("an u32 - this is a bug, please report it");
         }
 
-        self.write_32(address, &buffer)?;
+        self.write_32(address, &buffer).await?;
         Ok(())
     }
 
@@ -282,7 +287,7 @@ where
             // If we do not support 8 bit transfers we have to bail
             // because we have to do unaligned writes but can only do
             // 32 bit word aligned transers.
-            if !self.supports_8bit_transfers()? {
+            if !self.supports_8bit_transfers().await? {
                 return Err(MemoryNotAlignedError {
                     address,
                     alignment: 4,
@@ -293,7 +298,7 @@ where
 
         if start_extra_count != 0 {
             // We first do an 8 bit write of the first < 4 bytes up until the 4 byte aligned boundary.
-            self.write_8(address, &data[..start_extra_count])?;
+            self.write_8(address, &data[..start_extra_count]).await?;
 
             address += start_extra_count as u64;
             data = &data[start_extra_count..];
@@ -306,7 +311,7 @@ where
             for (bytes, value) in data.chunks_exact(4).zip(buffer.iter_mut()) {
                 *value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
             }
-            self.write_32(address, &buffer)?;
+            self.write_32(address, &buffer).await?;
 
             address += inbetween_count as u64;
             data = &data[inbetween_count..];
@@ -314,7 +319,7 @@ where
 
         // We write the remaining bytes that we did not write yet which is always n < 4.
         if end_extra_count > 0 {
-            self.write_8(address, &data[..end_extra_count])?;
+            self.write_8(address, &data[..end_extra_count]).await?;
         }
 
         Ok(())

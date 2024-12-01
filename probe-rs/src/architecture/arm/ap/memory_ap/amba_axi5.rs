@@ -42,6 +42,7 @@ impl AmbaAxi5 {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl super::MemoryApType for AmbaAxi5 {
     type CSW = CSW;
 

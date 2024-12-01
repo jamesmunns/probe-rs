@@ -120,10 +120,10 @@ pub async fn get_arm_components(
 
     for ap_index in interface.access_ports(dp).await? {
         let component = if let Ok(mut memory) = interface.memory_interface(&ap_index).await {
-            match memory.base_address()? {
+            match memory.base_address().await? {
                 0 => Err(Error::Other("AP has a base address of 0".to_string())),
                 debug_base_address => {
-                    let component = Component::try_parse(&mut *memory, debug_base_address)?;
+                    let component = Component::try_parse(&mut *memory, debug_base_address).await?;
                     Ok(CoresightComponent::new(component, ap_index.clone()))
                 }
             }
@@ -374,16 +374,18 @@ pub async fn remove_swv_data_trace(
 
 /// Sets TRCENA in DEMCR to begin trace generation.
 pub async fn enable_tracing(core: &mut Core<'_>) -> Result<(), Error> {
-    let mut demcr = Demcr(core.read_word_32(Demcr::get_mmio_address())?);
+    let mut demcr = Demcr(core.read_word_32(Demcr::get_mmio_address()).await?);
     demcr.set_dwtena(true);
-    core.write_word_32(Demcr::get_mmio_address(), demcr.into())?;
+    core.write_word_32(Demcr::get_mmio_address(), demcr.into())
+        .await?;
     Ok(())
 }
 
 /// Disables TRCENA in DEMCR to disable trace generation.
 pub async fn disable_swv(core: &mut Core<'_>) -> Result<(), Error> {
-    let mut demcr = Demcr(core.read_word_32(Demcr::get_mmio_address())?);
+    let mut demcr = Demcr(core.read_word_32(Demcr::get_mmio_address()).await?);
     demcr.set_dwtena(false);
-    core.write_word_32(Demcr::get_mmio_address(), demcr.into())?;
+    core.write_word_32(Demcr::get_mmio_address(), demcr.into())
+        .await?;
     Ok(())
 }

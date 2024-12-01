@@ -17,7 +17,7 @@ impl InterfaceExt for Interface {
             Ok::<usize, io::Error>(n)
         };
 
-        fut
+        fut.await
     }
 
     async fn read_bulk(
