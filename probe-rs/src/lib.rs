@@ -82,8 +82,8 @@ mod core;
 mod error;
 pub mod flashing;
 #[cfg(feature = "gdb-server")]
-#[cfg_attr(probers_docsrs, doc(cfg(feature = "gdb-server")))]
-pub mod gdb_server;
+// #[cfg_attr(probers_docsrs, doc(cfg(feature = "gdb-server")))]
+// pub mod gdb_server;
 pub mod integration;
 mod memory;
 pub mod probe;

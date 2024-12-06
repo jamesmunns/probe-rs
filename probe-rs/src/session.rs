@@ -22,7 +22,7 @@ use crate::{
     },
     Core, CoreType, Error,
 };
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, pin, sync::Arc, time::Duration};
 use std::{future::Future, ops::DerefMut};
 
 /// The `Session` struct represents an active debug session.
@@ -437,9 +437,15 @@ impl Session {
     /// Get access to the session when all cores are halted.
     ///
     /// Any previously running cores will be resumed once the closure is executed.
-    pub(crate) async fn halted_access<R, F: Future<Output = Result<R, Error>>>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> F,
+    pub(crate) async fn halted_access<
+        'f,
+        'c: 'f,
+        's: 'c,
+        R,
+        F: Future<Output = Result<R, Error>> + 'f,
+    >(
+        &'s mut self,
+        f: impl FnOnce(&'c mut Self) -> F,
     ) -> Result<R, Error> {
         let mut resume_state = vec![];
         for (core, _) in self.list_cores() {
@@ -792,8 +798,9 @@ impl Session {
                     Ok(mut core) => core.clear_all_hw_breakpoints().await,
                     Err(Error::CoreDisabled(_)) => Ok(()),
                     Err(err) => Err(err),
-                }
+                }?;
             }
+            Ok(())
         })
         .await
     }

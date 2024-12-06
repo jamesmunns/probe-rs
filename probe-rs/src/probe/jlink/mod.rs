@@ -649,7 +649,8 @@ impl JLink {
 
         if self.speed_khz != 0 {
             // SelectIf resets the configured speed. Let's restore it.
-            self.set_interface_clock_speed(SpeedConfig::khz(self.speed_khz as u16).unwrap())?;
+            self.set_interface_clock_speed(SpeedConfig::khz(self.speed_khz as u16).unwrap())
+                .await?;
         }
 
         Ok(())
@@ -995,7 +996,7 @@ impl DebugProbe for JLink {
             return Err(DebugProbeError::UnsupportedSpeed(speed_khz));
         }
 
-        if let Ok(speeds) = self.read_interface_speeds() {
+        if let Ok(speeds) = self.read_interface_speeds().await {
             tracing::debug!("Supported speeds: {:?}", speeds);
 
             let max_speed_khz = speeds.max_speed_hz() / 1000;
@@ -1006,7 +1007,7 @@ impl DebugProbe for JLink {
         };
 
         if let Some(expected_speed) = SpeedConfig::khz(speed_khz as u16) {
-            self.set_interface_clock_speed(expected_speed)?;
+            self.set_interface_clock_speed(expected_speed).await?;
             self.speed_khz = speed_khz;
         } else {
             return Err(DebugProbeError::UnsupportedSpeed(speed_khz));
@@ -1313,13 +1314,14 @@ impl SwoAccess for JLink {
     async fn enable_swo(&mut self, config: &SwoConfig) -> Result<(), ArmError> {
         self.swo_config = Some(*config);
         self.swo_start(SwoMode::Uart, config.baud(), SWO_BUFFER_SIZE.into())
+            .await
             .map_err(DebugProbeError::from)?;
         Ok(())
     }
 
     async fn disable_swo(&mut self) -> Result<(), ArmError> {
         self.swo_config = None;
-        self.swo_stop().map_err(DebugProbeError::from)?;
+        self.swo_stop().await.map_err(DebugProbeError::from)?;
         Ok(())
     }
 
@@ -1338,7 +1340,10 @@ impl SwoAccess for JLink {
 
         let mut bytes = vec![];
         loop {
-            let data = self.swo_read(&mut buf).map_err(DebugProbeError::from)?;
+            let data = self
+                .swo_read(&mut buf)
+                .await
+                .map_err(DebugProbeError::from)?;
             bytes.extend(data.as_ref());
             if start.elapsed() > timeout {
                 break;
