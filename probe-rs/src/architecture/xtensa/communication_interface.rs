@@ -351,7 +351,7 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         &mut self,
         register: SpecialRegister,
     ) -> Result<DeferredResultIndex, XtensaError> {
-        let save_key = self.save_register(CpuRegister::A3).await?;
+        let save_key = Box::pin(self.save_register(CpuRegister::A3)).await?;
 
         // Read special register into the scratch register
         self.xdm
@@ -359,7 +359,7 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
         let reader = self.schedule_read_cpu_register(CpuRegister::A3).await;
 
-        self.restore_register(save_key).await?;
+        Box::pin(self.restore_register(save_key)).await?;
 
         Ok(reader)
     }

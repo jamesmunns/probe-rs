@@ -231,7 +231,7 @@ pub(crate) async fn check_for_semihosting(
     );
 
     let command = if TRAP_INSTRUCTION == actual_instruction {
-        Some(decode_semihosting_syscall(core)?)
+        Some(decode_semihosting_syscall(core).await?)
     } else {
         None
     };

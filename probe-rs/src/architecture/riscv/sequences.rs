@@ -15,12 +15,18 @@ use std::time::Duration;
 #[async_trait::async_trait(?Send)]
 pub trait RiscvDebugSequence: Send + Sync + Debug {
     /// Executed when the probe establishes a connection to the target.
-    fn on_connect(&self, _interface: &mut RiscvCommunicationInterface) -> Result<(), crate::Error> {
+    async fn on_connect(
+        &self,
+        _interface: &mut RiscvCommunicationInterface,
+    ) -> Result<(), crate::Error> {
         Ok(())
     }
 
     /// Detects the flash size of the target.
-    fn detect_flash_size(&self, _session: &mut Session) -> Result<Option<usize>, crate::Error> {
+    async fn detect_flash_size(
+        &self,
+        _session: &mut Session,
+    ) -> Result<Option<usize>, crate::Error> {
         Ok(None)
     }
 

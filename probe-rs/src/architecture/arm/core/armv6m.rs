@@ -855,7 +855,7 @@ impl<'probe> CoreInterface for Armv6m<'probe> {
         Ok(InstructionSet::Thumb2)
     }
 
-    fn fpu_support(&mut self) -> Result<bool, Error> {
+    async fn fpu_support(&mut self) -> Result<bool, Error> {
         Ok(false)
     }
 

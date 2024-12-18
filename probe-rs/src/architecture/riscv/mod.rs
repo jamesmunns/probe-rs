@@ -114,7 +114,7 @@ impl<'state> Riscv32<'state> {
         );
 
         let command = if TRAP_INSTRUCTIONS == actual_instructions {
-            Some(decode_semihosting_syscall(self)?)
+            Some(decode_semihosting_syscall(self).await?)
         } else {
             None
         };

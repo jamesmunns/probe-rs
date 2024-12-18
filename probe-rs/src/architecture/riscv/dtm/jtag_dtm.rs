@@ -457,7 +457,7 @@ impl<'probe> TunneledJtagDtm<'probe> {
 #[async_trait::async_trait(?Send)]
 impl DtmAccess for TunneledJtagDtm<'_> {
     async fn init(&mut self) -> Result<(), RiscvError> {
-        self.probe.tap_reset()?;
+        self.probe.tap_reset().await?;
         let raw_dtmcs = self.write_dtmcs(0).await?;
 
         if raw_dtmcs == 0 {

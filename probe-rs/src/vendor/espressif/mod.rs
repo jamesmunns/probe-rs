@@ -41,7 +41,10 @@ fn get_target_by_magic(info: &EspressifDetection, read_magic: u32) -> Option<Str
     None
 }
 
-fn try_detect_espressif_chip(probe: &mut impl MemoryInterface, idcode: u32) -> Option<String> {
+async fn try_detect_espressif_chip(
+    probe: &mut impl MemoryInterface,
+    idcode: u32,
+) -> Option<String> {
     let families = registry::families_ref();
     for family in families.iter() {
         for info in family
@@ -52,7 +55,7 @@ fn try_detect_espressif_chip(probe: &mut impl MemoryInterface, idcode: u32) -> O
             if info.idcode != idcode {
                 continue;
             }
-            let Ok(read_magic) = probe.read_word_32(MAGIC_VALUE_ADDRESS) else {
+            let Ok(read_magic) = probe.read_word_32(MAGIC_VALUE_ADDRESS).await else {
                 continue;
             };
             tracing::debug!("Read magic value: {read_magic:#010x}");
@@ -69,8 +72,9 @@ fn try_detect_espressif_chip(probe: &mut impl MemoryInterface, idcode: u32) -> O
 #[derive(docsplay::Display)]
 pub struct Espressif;
 
+#[async_trait::async_trait(?Send)]
 impl Vendor for Espressif {
-    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.eq_ignore_ascii_case("esp32s2") {
             DebugSequence::Xtensa(ESP32S2::create())
         } else if chip.name.eq_ignore_ascii_case("esp32s3") {
@@ -92,21 +96,23 @@ impl Vendor for Espressif {
         Some(sequence)
     }
 
-    fn try_detect_riscv_chip(
+    async fn try_detect_riscv_chip(
         &self,
-        probe: &mut RiscvCommunicationInterface,
+        probe: &mut RiscvCommunicationInterface<'_>,
         idcode: u32,
     ) -> Result<Option<String>, Error> {
-        let result = probe.halted_access(|probe| Ok(try_detect_espressif_chip(probe, idcode)))?;
+        let result = probe
+            .halted_access(|probe| Ok(try_detect_espressif_chip(probe, idcode).await))
+            .await?;
 
         Ok(result)
     }
 
-    fn try_detect_xtensa_chip(
+    async fn try_detect_xtensa_chip(
         &self,
-        probe: &mut XtensaCommunicationInterface,
+        probe: &mut XtensaCommunicationInterface<'_>,
         idcode: u32,
     ) -> Result<Option<String>, Error> {
-        Ok(try_detect_espressif_chip(probe, idcode))
+        Ok(try_detect_espressif_chip(probe, idcode).await)
     }
 }

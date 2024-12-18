@@ -215,7 +215,7 @@ impl DebugProbe for EspUsbJtag {
         ))
     }
 
-    fn get_target_voltage(&mut self) -> Result<Option<f32>, DebugProbeError> {
+    async fn get_target_voltage(&mut self) -> Result<Option<f32>, DebugProbeError> {
         // We cannot read the voltage on this probe, unfortunately.
         Ok(None)
     }

@@ -206,7 +206,7 @@ impl<'probe> Xtensa<'probe> {
         tracing::debug!("Semihosting check pc={pc:#x} instruction={actual_instruction:#010x}");
 
         let command = if actual_instruction == SEMI_BREAK {
-            Some(decode_semihosting_syscall(self)?)
+            Some(decode_semihosting_syscall(self).await?)
         } else {
             None
         };

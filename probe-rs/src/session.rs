@@ -112,12 +112,12 @@ impl ArchitectureInterface {
                 probe.select_jtag_tap(idx).await?;
                 match &mut ifaces[idx] {
                     JtagInterface::Riscv(state) => {
-                        let factory = probe.try_get_riscv_interface_builder()?;
+                        let factory = probe.try_get_riscv_interface_builder().await?;
                         let iface = factory.attach_auto(target, state)?;
                         combined_state.attach_riscv(target, iface).await
                     }
                     JtagInterface::Xtensa(state) => {
-                        let iface = probe.try_get_xtensa_interface(state)?;
+                        let iface = probe.try_get_xtensa_interface(state).await?;
                         combined_state.attach_xtensa(target, iface).await
                     }
                     JtagInterface::Unknown => {
@@ -350,7 +350,7 @@ impl Session {
 
             interfaces[iface_idx] = match core_arch {
                 Architecture::Riscv => {
-                    let factory = probe.try_get_riscv_interface_builder()?;
+                    let factory = probe.try_get_riscv_interface_builder().await?;
                     let mut state = factory.create_state();
                     {
                         let mut interface = factory.attach_auto(&target, &mut state)?;
@@ -396,7 +396,9 @@ impl Session {
 
             DebugSequence::Riscv(sequence) => {
                 for core_id in 0..session.cores.len() {
-                    sequence.on_connect(&mut session.get_riscv_interface(core_id).await?)?;
+                    sequence
+                        .on_connect(&mut session.get_riscv_interface(core_id).await?)
+                        .await?;
                 }
             }
             _ => unreachable!("Other architectures should have already been handled"),
@@ -575,7 +577,7 @@ impl Session {
         if let ArchitectureInterface::Jtag(probe, ifaces) = &mut self.interfaces {
             probe.select_jtag_tap(tap_idx).await?;
             if let JtagInterface::Riscv(state) = &mut ifaces[tap_idx] {
-                let factory = probe.try_get_riscv_interface_builder()?;
+                let factory = probe.try_get_riscv_interface_builder().await?;
                 return Ok(factory.attach_auto(&self.target, state)?);
             }
         }
@@ -591,7 +593,7 @@ impl Session {
         if let ArchitectureInterface::Jtag(probe, ifaces) = &mut self.interfaces {
             probe.select_jtag_tap(tap_idx).await?;
             if let JtagInterface::Xtensa(state) = &mut ifaces[tap_idx] {
-                return Ok(probe.try_get_xtensa_interface(state)?);
+                return Ok(probe.try_get_xtensa_interface(state).await?);
             }
         }
         Err(XtensaError::NoXtensaTarget.into())
@@ -875,7 +877,8 @@ async fn get_target_from_selector(
             }
             probe.attach_to_unspecified().await?;
 
-            let (returned_probe, found_target) = crate::vendor::auto_determine_target(probe)?;
+            let (returned_probe, found_target) =
+                crate::vendor::auto_determine_target(probe).await?;
             probe = returned_probe;
 
             if AttachMethod::UnderReset == attach_method {

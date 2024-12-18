@@ -469,7 +469,7 @@ impl<'probe> CoreInterface for Armv8m<'probe> {
         Ok(InstructionSet::Thumb2)
     }
 
-    fn fpu_support(&mut self) -> Result<bool, Error> {
+    async fn fpu_support(&mut self) -> Result<bool, Error> {
         Ok(self.state.fp_present)
     }
 

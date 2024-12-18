@@ -22,8 +22,9 @@ pub mod sequences;
 #[derive(docsplay::Display)]
 pub struct Nxp;
 
+#[async_trait::async_trait(?Send)]
 impl Vendor for Nxp {
-    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("MIMXRT10") {
             DebugSequence::Arm(MIMXRT10xx::create())
         } else if chip.name.starts_with("MIMXRT117") {

@@ -21,8 +21,9 @@ pub mod sequences;
 #[derive(docsplay::Display)]
 pub struct St;
 
+#[async_trait::async_trait(?Send)]
 impl Vendor for St {
-    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("STM32F0") {
             DebugSequence::Arm(Stm32Armv6::create(Stm32Armv6Family::F0))
         } else if chip.name.starts_with("STM32L0") {

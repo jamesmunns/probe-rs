@@ -121,7 +121,7 @@ pub trait SwoAccess {
     /// Returns a `Vec<u8>` of received SWO bytes since the last `read_swo()` call.
     /// If no data was available, returns an empty Vec.
     async fn read_swo(&mut self) -> Result<Vec<u8>, ArmError> {
-        self.read_swo_timeout(Duration::from_millis(10))
+        self.read_swo_timeout(Duration::from_millis(10)).await
     }
 
     /// Read SWO data for up to `timeout` duration.
@@ -182,8 +182,8 @@ impl<'a> SwoReader<'a> {
     }
 }
 
-impl<'a> std::io::Read for SwoReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+impl<'a> SwoReader<'a> {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         use std::{
             cmp,
             io::{Error, ErrorKind},
@@ -198,6 +198,7 @@ impl<'a> std::io::Read for SwoReader<'a> {
             &mut self
                 .interface
                 .read_swo()
+                .await
                 .map_err(|e| Error::new(ErrorKind::Other, e))?,
         );
 
