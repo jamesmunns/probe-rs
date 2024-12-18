@@ -242,16 +242,14 @@ impl ImageLoader for IdfLoader {
             XtalFrequency::_40Mhz
         };
 
-        let flash_size_result = session
-            .halted_access(|session| async {
-                // Figure out flash size from the memory map. We need a different bootloader for each size.
-                match session.target().debug_sequence.clone() {
-                    DebugSequence::Riscv(sequence) => sequence.detect_flash_size(session).await,
-                    DebugSequence::Xtensa(sequence) => sequence.detect_flash_size(session).await,
-                    DebugSequence::Arm(_) => panic!("There are no ARM ESP targets."),
-                }
-            })
-            .await;
+        // Figure out flash size from the memory map. We need a different bootloader for each size.
+        let resume_state = session.halted_access_start().await?;
+        let flash_size_result = match session.target().debug_sequence.clone() {
+            DebugSequence::Riscv(sequence) => sequence.detect_flash_size(session).await,
+            DebugSequence::Xtensa(sequence) => sequence.detect_flash_size(session).await,
+            DebugSequence::Arm(_) => panic!("There are no ARM ESP targets."),
+        };
+        session.halted_access_end(resume_state).await?;
 
         let flash_size = match flash_size_result.map_err(FileDownloadError::FlashSizeDetection)? {
             Some(0x40000) => Some(FlashSize::_256Kb),

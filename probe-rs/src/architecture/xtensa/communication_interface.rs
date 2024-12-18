@@ -251,13 +251,10 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         Ok(was_running)
     }
 
-    async fn fast_halted_access(
-        &mut self,
-        mut op: impl FnMut(&mut Self) -> Result<(), XtensaError>,
-    ) -> Result<(), XtensaError> {
+    async fn fast_halted_access_start(&mut self) -> Result<bool, XtensaError> {
         if self.state.is_halted {
             // Core is already halted, we don't need to do anything.
-            return op(self);
+            return Ok(false);
         }
 
         // If we have not halted the core, it may still be halted on a breakpoint, for example.
@@ -273,7 +270,7 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
         // Execute the operation while the core is presumed halted. If it is not, we will have
         // various errors, but we will retry the operation.
-        let result = op(self);
+        // let result = op(self);
 
         // If the core was running, resume it.
         let before_status =
@@ -283,34 +280,27 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         }
 
         // If we did not manage to halt the core at once, let's retry using the slow path.
-        let after_status = DebugStatus(
-            self.xdm
-                .read_deferred_result(is_halted_idx)
-                .await?
-                .into_u32(),
-        );
+        // let after_status = DebugStatus(
+        //     self.xdm
+        //         .read_deferred_result(is_halted_idx)
+        //         .await?
+        //         .into_u32(),
+        // );
 
-        if after_status.stopped() {
-            return result;
-        }
+        // if after_status.stopped() {
+        //     return result;
+        // }
         self.state.is_halted = false;
-        self.halted_access(|this| op(this)).await
+        let was_running = self.halt_with_previous(Duration::from_millis(100)).await?;
+        Ok(was_running)
     }
 
-    /// Executes a closure while ensuring the core is halted.
-    pub async fn halted_access<R>(
-        &mut self,
-        op: impl FnOnce(&mut Self) -> Result<R, XtensaError>,
-    ) -> Result<R, XtensaError> {
-        let was_running = self.halt_with_previous(Duration::from_millis(100)).await?;
-
-        let result = op(self);
-
+    async fn fast_halted_access_end(&mut self, was_running: bool) -> Result<(), XtensaError> {
         if was_running {
             self.resume_core().await?;
         }
 
-        result
+        Ok(())
     }
 
     /// Steps the core by one instruction.
@@ -641,18 +631,17 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
         let mut memory_access = self.memory_access_for(address, dst.len());
 
-        let result = self
-            .fast_halted_access(|this| async {
-                memory_access.save_scratch_registers(this).await?;
-                let result = this
-                    .read_memory_impl(memory_access.as_mut(), address, dst)
-                    .await;
-                memory_access.restore_scratch_registers(this).await?;
-                result
-            })
-            .await;
+        let was_running = self.fast_halted_access_start().await?;
+        memory_access.save_scratch_registers(self).await?;
+        self.read_memory_impl(memory_access.as_mut(), address, dst)
+            .await?;
+        memory_access.restore_scratch_registers(self).await?;
 
-        result
+        if was_running {
+            self.fast_halted_access_end(was_running).await?;
+        }
+
+        Ok(())
     }
 
     async fn read_memory_impl(
@@ -740,18 +729,16 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
         let mut memory_access = self.memory_access_for(address, data.len());
 
-        let result = self
-            .fast_halted_access(|this| async {
-                memory_access.save_scratch_registers(this).await?;
-                let result = this
-                    .write_memory_impl(memory_access.as_mut(), address, data)
-                    .await;
-                memory_access.restore_scratch_registers(this).await?;
-                result
-            })
-            .await;
+        let was_running = self.fast_halted_access_start().await?;
+        memory_access.save_scratch_registers(self).await?;
+        self.write_memory_impl(memory_access.as_mut(), address, data)
+            .await?;
+        memory_access.restore_scratch_registers(self).await?;
 
-        result
+        if was_running {
+            self.fast_halted_access_end(was_running).await?;
+        }
+        Ok(())
     }
 
     async fn write_memory_unaligned8(

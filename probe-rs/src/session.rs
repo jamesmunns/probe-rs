@@ -439,16 +439,7 @@ impl Session {
     /// Get access to the session when all cores are halted.
     ///
     /// Any previously running cores will be resumed once the closure is executed.
-    pub(crate) async fn halted_access<
-        'f,
-        'c: 'f,
-        's: 'c,
-        R,
-        F: Future<Output = Result<R, Error>> + 'f,
-    >(
-        &'s mut self,
-        f: impl FnOnce(&'c mut Self) -> F,
-    ) -> Result<R, Error> {
+    pub(crate) async fn halted_access_start(&mut self) -> Result<Vec<usize>, Error> {
         let mut resume_state = vec![];
         for (core, _) in self.list_cores() {
             let mut c = match self.core(core).await {
@@ -464,14 +455,19 @@ impl Session {
             }
         }
 
-        let r = f(self).await;
+        Ok(resume_state)
+    }
 
+    pub(crate) async fn halted_access_end(
+        &mut self,
+        resume_state: Vec<usize>,
+    ) -> Result<(), Error> {
         for core in resume_state {
             tracing::debug!("Resuming core...");
             self.core(core).await?.run().await?;
         }
 
-        r
+        Ok(())
     }
 
     fn interface_idx(&self, core: usize) -> Result<usize, Error> {
@@ -794,17 +790,15 @@ impl Session {
 
     /// Clears all hardware breakpoints on all cores
     pub async fn clear_all_hw_breakpoints(&mut self) -> Result<(), Error> {
-        self.halted_access(|session| async {
-            for core in 0..session.cores.len() {
-                match session.core(core).await {
-                    Ok(mut core) => core.clear_all_hw_breakpoints().await,
-                    Err(Error::CoreDisabled(_)) => Ok(()),
-                    Err(err) => Err(err),
-                }?;
-            }
-            Ok(())
-        })
-        .await
+        let resume_state = self.halted_access_start().await?;
+        for core in 0..self.cores.len() {
+            match self.core(core).await {
+                Ok(mut core) => core.clear_all_hw_breakpoints().await,
+                Err(Error::CoreDisabled(_)) => Ok(()),
+                Err(err) => Err(err),
+            }?;
+        }
+        self.halted_access_end(resume_state).await
     }
 
     /// Resume all cores

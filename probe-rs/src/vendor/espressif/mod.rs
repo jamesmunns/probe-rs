@@ -1,5 +1,7 @@
 //! Espressif vendor support.
 
+use std::time::Duration;
+
 use probe_rs_target::{
     chip_detection::{ChipDetectionMethod, EspressifDetection},
     Chip,
@@ -101,9 +103,11 @@ impl Vendor for Espressif {
         probe: &mut RiscvCommunicationInterface<'_>,
         idcode: u32,
     ) -> Result<Option<String>, Error> {
-        let result = probe
-            .halted_access(|probe| Ok(try_detect_espressif_chip(probe, idcode).await))
-            .await?;
+        let was_running = probe.halt_with_previous(Duration::from_millis(100)).await?;
+        let result = try_detect_espressif_chip(probe, idcode).await;
+        if was_running {
+            probe.resume_core().await?;
+        }
 
         Ok(result)
     }
