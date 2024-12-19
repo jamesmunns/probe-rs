@@ -88,7 +88,7 @@ impl<'probe> Armv8m<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Armv8m<'probe> {
+impl CoreInterface for Armv8m<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         // Wait until halted state is active again.
         let start = Instant::now();

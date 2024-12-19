@@ -13,7 +13,7 @@ pub struct Vorago;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for Vorago {
-    async  fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("VA416xx") {
             DebugSequence::Arm(Va416xx::create())
         } else {

@@ -646,7 +646,7 @@ impl<'probe> Armv7m<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Armv7m<'probe> {
+impl CoreInterface for Armv7m<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         // Wait until halted state is active again.
         let start = Instant::now();
@@ -674,7 +674,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
                 "The core is in locked up status as a result of an unrecoverable exception"
             );
 
-            self.set_core_status(CoreStatus::LockedUp);
+            self.set_core_status(CoreStatus::LockedUp).await;
 
             return Ok(CoreStatus::LockedUp);
         }
@@ -685,7 +685,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
                 tracing::warn!("Expected core to be halted, but core is running");
             }
 
-            self.set_core_status(CoreStatus::Sleeping);
+            self.set_core_status(CoreStatus::Sleeping).await;
 
             return Ok(CoreStatus::Sleeping);
         }
@@ -719,7 +719,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
             }
 
             // Set the status so any semihosting operations will know we're halted
-            self.set_core_status(CoreStatus::Halted(reason));
+            self.set_core_status(CoreStatus::Halted(reason)).await;
 
             if let HaltReason::Breakpoint(_) = reason {
                 self.state.semihosting_command = super::cortex_m::check_for_semihosting(
@@ -732,7 +732,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
                 }
 
                 // Set it again if it's changed
-                self.set_core_status(CoreStatus::Halted(reason));
+                self.set_core_status(CoreStatus::Halted(reason)).await;
             }
 
             return Ok(CoreStatus::Halted(reason));
@@ -743,7 +743,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
             tracing::warn!("Core is running, but we expected it to be halted");
         }
 
-        self.set_core_status(CoreStatus::Running);
+        self.set_core_status(CoreStatus::Running).await;
 
         Ok(CoreStatus::Running)
     }
@@ -797,7 +797,7 @@ impl<'probe> CoreInterface for Armv7m<'probe> {
         self.memory.flush().await?;
 
         // We assume that the core is running now
-        self.set_core_status(CoreStatus::Running);
+        self.set_core_status(CoreStatus::Running).await;
 
         Ok(())
     }

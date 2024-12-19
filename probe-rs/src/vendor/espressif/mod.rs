@@ -76,7 +76,7 @@ pub struct Espressif;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for Espressif {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.eq_ignore_ascii_case("esp32s2") {
             DebugSequence::Xtensa(ESP32S2::create())
         } else if chip.name.eq_ignore_ascii_case("esp32s3") {

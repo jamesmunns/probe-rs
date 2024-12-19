@@ -22,8 +22,8 @@ use crate::{
     },
     Core, CoreType, Error,
 };
-use std::{fmt, pin, sync::Arc, time::Duration};
-use std::{future::Future, ops::DerefMut};
+use std::ops::DerefMut;
+use std::{fmt, sync::Arc, time::Duration};
 
 /// The `Session` struct represents an active debug session.
 ///
@@ -308,7 +308,7 @@ impl Session {
         // handle most of the setup in the same way.
         if let Some(jtag) = target.jtag.as_ref() {
             if let Some(scan_chain) = jtag.scan_chain.clone() {
-                probe.set_scan_chain(scan_chain).await;
+                probe.set_scan_chain(scan_chain).await?;
             }
         }
 
@@ -617,7 +617,7 @@ impl Session {
         std::mem::swap(interface, &mut tmp_interface);
 
         tracing::debug!("Re-attaching Probe");
-        let mut probe = tmp_interface.close();
+        let mut probe = tmp_interface.close().await;
         probe.detach().await?;
         probe.attach_to_unspecified().await?;
 
@@ -668,7 +668,7 @@ impl Session {
             .ok_or(Error::Arm(ArmError::NotImplemented("Debug Erase Sequence")))?;
 
         tracing::info!("Trying Debug Erase Sequence");
-        let erase_result = erase_sequence.erase_all(interface.deref_mut());
+        let erase_result = erase_sequence.erase_all(interface.deref_mut()).await;
 
         match erase_result {
             Ok(()) => (),
@@ -830,6 +830,8 @@ const _: fn() = || {
 impl Drop for Session {
     #[tracing::instrument(name = "session_drop", skip(self))]
     fn drop(&mut self) {
+        tracing::debug!("Dropping session");
+        // TODO: drop
         // if let Err(err) = self.clear_all_hw_breakpoints() {
         //     tracing::warn!(
         //         "Could not clear all hardware breakpoints: {:?}",

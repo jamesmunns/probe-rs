@@ -15,7 +15,7 @@ pub struct TexasInstruments;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for TexasInstruments {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("CC13") || chip.name.starts_with("CC26") {
             DebugSequence::Arm(CC13xxCC26xx::create(chip.name.clone()))
         } else {

@@ -27,7 +27,7 @@ pub struct NordicSemi;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for NordicSemi {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("nRF5340") {
             DebugSequence::Arm(Nrf5340::create())
         } else if chip.name.starts_with("nRF52") {

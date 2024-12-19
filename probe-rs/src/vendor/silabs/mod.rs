@@ -15,7 +15,7 @@ pub struct SiliconLabs;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for SiliconLabs {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("EFM32PG2")
             || chip.name.starts_with("EFR32BG2")
             || chip.name.starts_with("EFR32FG2")

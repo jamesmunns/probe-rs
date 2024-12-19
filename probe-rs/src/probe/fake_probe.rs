@@ -521,7 +521,7 @@ impl UninitializedArmProbe for FakeArmInterface<Uninitialized> {
         Ok(Box::new(interface))
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 }
@@ -564,7 +564,7 @@ impl ArmProbeInterface for FakeArmInterface<Initialized> {
         Ok(None)
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 

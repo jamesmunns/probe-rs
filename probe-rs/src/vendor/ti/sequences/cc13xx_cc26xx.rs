@@ -203,7 +203,7 @@ impl CC13xxCC26xx {
     /// * `payload`   - The data to write to the register
     /// * `state`     - The current state of the JTAG state machine. Note this will be updated by this function
     ///                so that the state is correct after the function returns
-    fn icepick_router(
+    async fn icepick_router(
         &self,
         interface: &mut dyn DapProbe,
         rw: u32,
@@ -220,10 +220,12 @@ impl CC13xxCC26xx {
             | (payload & 0xFFFFFF);
 
         // Load IR with the router instruction, this allows us to write or read a data register
-        self.shift_ir(interface, IR_ROUTER, state, JtagState::SelectDRScan)?;
+        self.shift_ir(interface, IR_ROUTER, state, JtagState::SelectDRScan)
+            .await?;
         // Load the data register with the register block, address, and data
         // The address and value to be written is encoded in the DR value
-        self.shift_dr(interface, 32, dr as u64, state, JtagState::SelectDRScan)?;
+        self.shift_dr(interface, 32, dr as u64, state, JtagState::SelectDRScan)
+            .await?;
         Ok(())
     }
 
@@ -244,21 +246,26 @@ impl CC13xxCC26xx {
         let block = 0x02;
 
         // Select the Connect register
-        self.shift_ir(interface, IR_CONNECT, state, JtagState::SelectDRScan)?;
+        self.shift_ir(interface, IR_CONNECT, state, JtagState::SelectDRScan)
+            .await?;
         // Enable write, set the `ConnectKey` to 0b1001 (0x9) as per TRM section 6.3.3
-        self.shift_dr(interface, 8, 0x89, state, JtagState::SelectDRScan)?;
+        self.shift_dr(interface, 8, 0x89, state, JtagState::SelectDRScan)
+            .await?;
         // Write to register 1 in the ICEPICK control block - keep JTAG powered in test logic reset
-        self.icepick_router(interface, 1, 0, 1, 0x000080, state)?;
+        self.icepick_router(interface, 1, 0, 1, 0x000080, state)
+            .await?;
         // Write to register 0 in the Debug TAP linking block (Section 6.3.4.3)
         // Namely:
         // * [20]   : `InhibitSleep`
         // * [16:14]: `ResetControl == Wait In Reset`
         // * [8]    : `SelectTAP == 1`
         // * [3]    : `ForceActive == Enable clocks`
-        self.icepick_router(interface, 1, block, port, 0x110108, state)?;
+        self.icepick_router(interface, 1, block, port, 0x110108, state)
+            .await?;
 
         // Enter the bypass state
-        self.shift_ir(interface, IR_BYPASS, state, JtagState::RunTestIdle)?;
+        self.shift_ir(interface, IR_BYPASS, state, JtagState::RunTestIdle)
+            .await?;
 
         // Remain in run-test idle for 10 cycles
         interface.jtag_sequence(10, false, set_n_bits(10)).await?;
@@ -271,7 +278,8 @@ impl CC13xxCC26xx {
         jtag_state: &mut JtagState,
     ) -> Result<(), ArmError> {
         // Load IR with BYPASS
-        self.shift_ir(interface, IR_BYPASS, jtag_state, JtagState::RunTestIdle)?;
+        self.shift_ir(interface, IR_BYPASS, jtag_state, JtagState::RunTestIdle)
+            .await?;
 
         // cJTAG: Open Command Window
         // This is described in section 6.2.2.1 of this document:
@@ -280,7 +288,8 @@ impl CC13xxCC26xx {
         // <https://github.com/openocd-org/openocd/blob/master/tcl/target/ti-cjtag.cfg#L6-L35>
         self.zero_bit_scan(interface).await?;
         self.zero_bit_scan(interface).await?;
-        self.shift_dr(interface, 1, 0x01, jtag_state, JtagState::RunTestIdle)?;
+        self.shift_dr(interface, 1, 0x01, jtag_state, JtagState::RunTestIdle)
+            .await?;
 
         // cJTAG: Switch to 4 pin
         // This is described in section 6.2.2.2 of this document:
@@ -293,17 +302,20 @@ impl CC13xxCC26xx {
             set_n_bits(2),
             jtag_state,
             JtagState::RunTestIdle,
-        )?;
+        )
+        .await?;
         self.shift_dr(
             interface,
             9,
             set_n_bits(9),
             jtag_state,
             JtagState::RunTestIdle,
-        )?;
+        )
+        .await?;
 
         // Load IR with BYPASS so that future state transitions don't affect IR
-        self.shift_ir(interface, IR_BYPASS, jtag_state, JtagState::RunTestIdle)?;
+        self.shift_ir(interface, IR_BYPASS, jtag_state, JtagState::RunTestIdle)
+            .await?;
 
         // Connect CPU DAP to top level TAP
         // This is done by interacting with the top level TAP which is called ICEPICK
@@ -360,7 +372,7 @@ impl ArmDebugSequence for CC13xxCC26xx {
         let demcr = Demcr(probe.read_word_32(Demcr::get_mmio_address()).await?);
 
         // Do target specific reset
-        reset_chip(&self.name, probe);
+        reset_chip(&self.name, probe).await;
 
         // Since the system went down, including the debug, we should flush any pending operations
         probe.flush().await.ok();
@@ -418,7 +430,7 @@ impl ArmDebugSequence for CC13xxCC26xx {
                         },
                     ));
                 }
-                self.ctag_to_jtag(interface, &mut jtag_state)?;
+                self.ctag_to_jtag(interface, &mut jtag_state).await?;
 
                 // Call the configure JTAG function. We don't derive the scan chain at runtime
                 // for these devices, but regardless the scan chain must be told to the debug probe

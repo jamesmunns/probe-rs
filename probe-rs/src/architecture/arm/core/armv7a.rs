@@ -99,7 +99,7 @@ impl<'probe> Armv7a<'probe> {
         };
 
         if !core.state.initialized() {
-            core.reset_register_cache();
+            core.reset_register_cache().await;
             core.read_fp_reg_count().await?;
             core.state.initialize();
         }
@@ -269,7 +269,7 @@ impl<'probe> Armv7a<'probe> {
             }
         }
 
-        self.reset_register_cache();
+        self.reset_register_cache().await;
 
         Ok(())
     }
@@ -308,7 +308,7 @@ impl<'probe> Armv7a<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Armv7a<'probe> {
+impl CoreInterface for Armv7a<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         // Wait until halted state is active again.
         let start = Instant::now();
@@ -339,7 +339,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
         if dbgdscr.halted() {
             let reason = dbgdscr.halt_reason();
 
-            self.set_core_status(CoreStatus::Halted(reason));
+            self.set_core_status(CoreStatus::Halted(reason)).await;
 
             self.read_fp_reg_count().await?;
 
@@ -350,7 +350,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
             tracing::warn!("Core is running, but we expected it to be halted");
         }
 
-        self.set_core_status(CoreStatus::Running);
+        self.set_core_status(CoreStatus::Running).await;
 
         Ok(CoreStatus::Running)
     }
@@ -366,7 +366,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
             self.wait_for_core_halted(timeout).await?;
 
             // Reset our cached values
-            self.reset_register_cache();
+            self.reset_register_cache().await;
         }
         // Update core status
         let _ = self.status().await?;
@@ -404,7 +404,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
         }
 
         // Recompute / verify current state
-        self.set_core_status(CoreStatus::Running);
+        self.set_core_status(CoreStatus::Running).await;
         let _ = self.status().await?;
 
         Ok(())
@@ -420,7 +420,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
             .await?;
 
         // Reset our cached values
-        self.reset_register_cache();
+        self.reset_register_cache().await;
 
         Ok(())
     }
@@ -463,7 +463,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
         let _ = self.status().await?;
 
         // Reset our cached values
-        self.reset_register_cache();
+        self.reset_register_cache().await;
 
         // try to read the program counter
         let pc_value = self.read_core_reg(self.program_counter().into()).await?;
@@ -795,7 +795,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
         }
     }
 
-    fn fpu_support(&mut self) -> Result<bool, Error> {
+    async fn fpu_support(&mut self) -> Result<bool, Error> {
         Ok(self.state.fp_reg_count != 0)
     }
 
@@ -839,7 +839,7 @@ impl<'probe> CoreInterface for Armv7a<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> MemoryInterface for Armv7a<'probe> {
+impl MemoryInterface for Armv7a<'_> {
     async fn supports_native_64bit_access(&mut self) -> bool {
         false
     }

@@ -301,7 +301,8 @@ fn requires_connection_handle(selector: &DebugProbeSelector) -> bool {
 
 impl Drop for JLink {
     fn drop(&mut self) {
-        // TODO:
+        tracing::debug!("Detaching from J-Link");
+        // TODO: drop
         // self.unregister_connection().await.ok();
     }
 }
@@ -815,7 +816,7 @@ impl JLink {
         const COMMAND_OVERHEAD: u32 = 4;
 
         let max_bits = ((self.max_mem_block_size - COMMAND_OVERHEAD) / 2 * 8) as usize;
-        let max_bits = max_bits.min(65535);
+        let max_bits = std::cmp::min(max_bits, 65535);
 
         let dir_chunks = dir.into_iter().chunks(max_bits);
         let swdio_chunks = swdio.into_iter().chunks(max_bits);
@@ -897,7 +898,7 @@ impl JLink {
         Ok(handle)
     }
 
-    async fn unregister_connection(&mut self) -> Result<(), JlinkError> {
+    async fn _unregister_connection(&mut self) -> Result<(), JlinkError> {
         if !self.caps.contains(Capability::Register) {
             return Ok(());
         }

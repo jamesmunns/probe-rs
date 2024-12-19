@@ -212,7 +212,7 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
 
         // Check and report the target voltage.
         let target_voltage = self
-            .get_target_voltage()?
+            .get_target_voltage().await?
             .expect("The ST-Link returned None when it should only be able to return Some(f32) or an error. Please report this bug!");
         if target_voltage < crate::probe::LOW_TARGET_VOLTAGE_WARNING_THRESHOLD {
             tracing::warn!(
@@ -369,11 +369,13 @@ impl DebugProbe for StLink<StLinkUsbDevice> {
 
 impl<D: StLinkUsb> Drop for StLink<D> {
     fn drop(&mut self) {
+        tracing::debug!("Detaching from ST-Link");
         // We ignore the error cases as we can't do much about it anyways.
-        if self.swo_enabled {
-            let _ = self.disable_swo();
-        }
-        let _ = self.enter_idle();
+        // TODO: drop
+        // if self.swo_enabled {
+        //     let _ = self.disable_swo().await;
+        // }
+        // let _ = self.enter_idle().await;
     }
 }
 
@@ -740,7 +742,7 @@ impl<D: StLinkUsb> StLink<D> {
 
         let mut buf = [0; 2];
         tracing::trace!("JTAG_INIT_AP {}", apsel);
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.send_jtag_command(
                 &[commands::JTAG_COMMAND, commands::JTAG_INIT_AP, apsel],
                 &[],
@@ -748,7 +750,8 @@ impl<D: StLinkUsb> StLink<D> {
                 TIMEOUT,
             )
             .await
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -767,7 +770,7 @@ impl<D: StLinkUsb> StLink<D> {
 
         let mut buf = [0; 2];
         tracing::trace!("JTAG_CLOSE_AP {}", apsel);
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.send_jtag_command(
                 &[commands::JTAG_COMMAND, commands::JTAG_CLOSE_AP_DBG, apsel],
                 &[],
@@ -775,7 +778,8 @@ impl<D: StLinkUsb> StLink<D> {
                 TIMEOUT,
             )
             .await
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -891,7 +895,7 @@ impl<D: StLinkUsb> StLink<D> {
             0, // Maximum address for DAP registers is 0xFC
         ];
         let mut buf = [0; 8];
-        retry_on_wait(|| self.send_jtag_command(cmd, &[], &mut buf, TIMEOUT).await).await?;
+        retry_on_wait(async || self.send_jtag_command(cmd, &[], &mut buf, TIMEOUT).await).await?;
         // Unwrap is ok!
         Ok(buf[4..8].pread_with(0, LE).unwrap())
     }
@@ -920,7 +924,7 @@ impl<D: StLinkUsb> StLink<D> {
         ];
         let mut buf = [0; 2];
 
-        retry_on_wait(|| self.send_jtag_command(cmd, &[], &mut buf, TIMEOUT).await).await?;
+        retry_on_wait(async || self.send_jtag_command(cmd, &[], &mut buf, TIMEOUT).await).await?;
 
         Ok(())
     }
@@ -955,7 +959,7 @@ impl<D: StLinkUsb> StLink<D> {
             return Err(DebugProbeError::from(StlinkError::UnalignedAddress));
         }
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_READMEM_32BIT, address, data.len(), apsel),
@@ -966,7 +970,8 @@ impl<D: StLinkUsb> StLink<D> {
                 .await?;
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         tracing::trace!("Read ok");
 
@@ -998,7 +1003,7 @@ impl<D: StLinkUsb> StLink<D> {
             return Err(DebugProbeError::from(StlinkError::UnalignedAddress));
         }
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_READMEM_16BIT, address, data.len(), apsel),
@@ -1009,7 +1014,8 @@ impl<D: StLinkUsb> StLink<D> {
                 .await?;
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         tracing::trace!("Read ok");
 
@@ -1055,7 +1061,7 @@ impl<D: StLinkUsb> StLink<D> {
 
         tracing::trace!("Read mem 8 bit, address={:08x}, length={}", address, length);
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_READMEM_8BIT, address, length as usize, apsel),
@@ -1070,7 +1076,8 @@ impl<D: StLinkUsb> StLink<D> {
             }
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         Ok(receive_buffer)
     }
@@ -1106,7 +1113,7 @@ impl<D: StLinkUsb> StLink<D> {
             return Err(DebugProbeError::from(StlinkError::UnalignedAddress));
         }
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_WRITEMEM_32BIT, address, data.len(), apsel),
@@ -1117,7 +1124,8 @@ impl<D: StLinkUsb> StLink<D> {
                 .await?;
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -1148,7 +1156,7 @@ impl<D: StLinkUsb> StLink<D> {
             return Err(DebugProbeError::from(StlinkError::UnalignedAddress));
         }
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_WRITEMEM_16BIT, address, data.len(), apsel),
@@ -1159,7 +1167,8 @@ impl<D: StLinkUsb> StLink<D> {
                 .await?;
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -1192,7 +1201,7 @@ impl<D: StLinkUsb> StLink<D> {
             );
         }
 
-        retry_on_wait(|| {
+        retry_on_wait(async || {
             self.device
                 .write(
                     &memory_command(commands::JTAG_WRITEMEM_8BIT, address, data.len(), apsel),
@@ -1203,7 +1212,8 @@ impl<D: StLinkUsb> StLink<D> {
                 .await?;
 
             self.get_last_rw_status().await
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -1359,7 +1369,7 @@ impl UninitializedArmProbe for UninitializedStLink {
         Ok(Box::new(interface))
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 }
@@ -1552,7 +1562,7 @@ impl ArmProbeInterface for StlinkArmDebug {
         Ok(self.access_ports.clone())
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 
@@ -1965,10 +1975,12 @@ fn is_wait_error(e: &StlinkError) -> bool {
     )
 }
 
-fn retry_on_wait<R>(mut f: impl FnMut() -> Result<R, StlinkError>) -> Result<R, StlinkError> {
+async fn retry_on_wait<R>(
+    mut f: impl async FnMut() -> Result<R, StlinkError>,
+) -> Result<R, StlinkError> {
     let mut last_err = None;
     for attempt in 0..13 {
-        match f() {
+        match f().await {
             Ok(res) => return Ok(res),
             Err(e) => {
                 if is_wait_error(&e) {

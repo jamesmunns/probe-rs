@@ -80,7 +80,7 @@ pub trait ArmProbeInterface: DapAccess + SwdSequence + SwoAccess + Send {
     ) -> Result<BTreeSet<FullyQualifiedApAddress>, ArmError>;
 
     /// Closes the interface and returns back the generic probe it consumed.
-    fn close(self: Box<Self>) -> Probe;
+    async fn close(self: Box<Self>) -> Probe;
 
     /// Return the currently connected debug port.
     fn current_debug_port(&self) -> DpAddress;
@@ -129,7 +129,7 @@ pub trait UninitializedArmProbe: SwdSequence + Debug {
     }
 
     /// Closes the interface and returns back the generic probe it consumed.
-    fn close(self: Box<Self>) -> Probe;
+    async fn close(self: Box<Self>) -> Probe;
 }
 
 pub trait ArmDebugState {
@@ -229,9 +229,12 @@ pub struct ArmCommunicationInterface<S: ArmDebugState> {
 
 impl<S: ArmDebugState> Drop for ArmCommunicationInterface<S> {
     fn drop(&mut self) {
-        if let Some(mut probe) = self.probe.take() {
-            self.state.disconnect(&mut *probe);
-        }
+        tracing::debug!("Dropping ArmCommInterface");
+        // TODO: drop
+        // if let Some(mut probe) = self.probe.take() {
+
+        //     self.state.disconnect(&mut *probe);
+        // }
     }
 }
 
@@ -241,10 +244,10 @@ impl<S: ArmDebugState> ArmCommunicationInterface<S> {
         self.probe.as_deref_mut().expect("ArmCommunicationInterface is in an inconsistent state. This is a bug, please report it.")
     }
 
-    fn close(mut self) -> Probe {
+    async fn close(mut self) -> Probe {
         let mut probe = self.probe.take().expect("ArmCommunicationInterface is in an inconsistent state. This is a bug, please report it.");
 
-        self.state.disconnect(&mut *probe);
+        self.state.disconnect(&mut *probe).await;
 
         Probe::from_attached_probe(RawDapAccess::into_probe(probe))
     }
@@ -276,8 +279,8 @@ impl ArmProbeInterface for ArmCommunicationInterface<Initialized> {
         self.state.current_dp
     }
 
-    fn close(self: Box<Self>) -> Probe {
-        ArmCommunicationInterface::close(*self)
+    async fn close(self: Box<Self>) -> Probe {
+        ArmCommunicationInterface::close(*self).await
     }
 
     async fn access_ports(
@@ -347,8 +350,8 @@ impl UninitializedArmProbe for ArmCommunicationInterface<Uninitialized> {
         }
     }
 
-    fn close(self: Box<Self>) -> Probe {
-        ArmCommunicationInterface::close(*self)
+    async fn close(self: Box<Self>) -> Probe {
+        ArmCommunicationInterface::close(*self).await
     }
 }
 
@@ -395,7 +398,7 @@ impl<'interface> ArmCommunicationInterface<Initialized> {
     pub(crate) async fn reinitialize(&mut self) -> Result<(), ArmError> {
         // Simulate the drop / close of the initialized communication interface.
         let mut probe = self.probe.take().expect("ArmCommunicationInterface is in an inconsistent state. This is a bug, please report it.");
-        self.state.disconnect(&mut *probe);
+        self.state.disconnect(&mut *probe).await;
 
         match Self::try_setup(
             probe,

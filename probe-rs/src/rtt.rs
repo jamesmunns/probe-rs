@@ -49,9 +49,7 @@ pub use channel::*;
 
 use crate::Session;
 use crate::{config::MemoryRegion, Core, MemoryInterface};
-use std::future::Future;
 use std::ops::Range;
-use std::pin::pin;
 use std::thread;
 use std::time::Instant;
 use std::{borrow::Cow, time::Duration};
@@ -530,8 +528,8 @@ fn display_list(list: &[Rtt]) -> String {
         .join(", ")
 }
 
-async fn try_attach_to_rtt_inner<F: Future<Output = Result<Rtt, Error>>>(
-    mut try_attach_once: impl FnMut() -> F,
+async fn try_attach_to_rtt_inner(
+    mut try_attach_once: impl async FnMut() -> Result<Rtt, Error>,
     timeout: Duration,
 ) -> Result<Rtt, Error> {
     let t = Instant::now();
@@ -557,11 +555,7 @@ pub async fn try_attach_to_rtt(
     timeout: Duration,
     rtt_region: &ScanRegion,
 ) -> Result<Rtt, Error> {
-    try_attach_to_rtt_inner(
-        || async { pin!(Rtt::attach_region(core, rtt_region)).await },
-        timeout,
-    )
-    .await
+    try_attach_to_rtt_inner(async || Rtt::attach_region(core, rtt_region).await, timeout).await
 }
 
 /// Try to attach to RTT, with the given timeout.

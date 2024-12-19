@@ -124,7 +124,7 @@ impl CmsisDap {
     async fn new_from_device(mut device: CmsisDapDevice) -> Result<Self, DebugProbeError> {
         // Discard anything left in buffer, as otherwise
         // we'll get out of sync between requests and responses.
-        device.drain();
+        device.drain().await;
 
         // Determine and set the packet size. We do this as soon as possible after
         // opening the probe to ensure all future communication uses the correct size.
@@ -292,8 +292,7 @@ impl CmsisDap {
         // How many bytes to write out / read in per request.
         const BYTES_PER_REQUEST: usize = 16;
         // How many requests are needed to read/write at least MAX_LENGTH bits.
-        const REQUESTS: usize =
-            (MAX_LENGTH + (BYTES_PER_REQUEST * 8 - 1)) / (BYTES_PER_REQUEST * 8);
+        const REQUESTS: usize = MAX_LENGTH.div_ceil(BYTES_PER_REQUEST * 8);
 
         // Completely fill xR with 0s, capture result.
         let mut tdo_bytes: Vec<u8> = Vec::with_capacity(REQUESTS * BYTES_PER_REQUEST);
@@ -1342,16 +1341,17 @@ impl SwoAccess for CmsisDap {
 impl Drop for CmsisDap {
     fn drop(&mut self) {
         tracing::debug!("Detaching from CMSIS-DAP probe");
-        // We ignore the error cases as we can't do much about it anyways.
-        let _ = self.process_batch();
+        // TODO: drop
+        // // We ignore the error cases as we can't do much about it anyways.
+        // let _ = self.process_batch();
 
-        // If SWO is active, disable it before calling detach,
-        // which ensures detach won't error on disabling SWO.
-        if self.swo_active {
-            let _ = self.disable_swo();
-        }
+        // // If SWO is active, disable it before calling detach,
+        // // which ensures detach won't error on disabling SWO.
+        // if self.swo_active {
+        //     let _ = self.disable_swo();
+        // }
 
-        let _ = self.detach();
+        // let _ = self.detach();
     }
 }
 

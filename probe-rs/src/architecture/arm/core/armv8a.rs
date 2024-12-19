@@ -22,7 +22,6 @@ use crate::{
     InstructionSet, MemoryInterface,
 };
 use std::{
-    future::Future,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -616,10 +615,9 @@ impl<'probe> Armv8a<'probe> {
         }
     }
 
-    async fn with_core_halted<'a: 'b, 'b: 'c, 'c, F, FT, R>(&'a mut self, f: F) -> Result<R, Error>
+    async fn with_core_halted<F, R>(&mut self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&'b mut Self) -> FT,
-        FT: Future<Output = Result<R, Error>> + 'c,
+        F: async FnOnce(&mut Self) -> Result<R, Error>,
     {
         // save halt status
         let original_halt_status = self.state.current_state.is_halted();
@@ -636,10 +634,9 @@ impl<'probe> Armv8a<'probe> {
         result
     }
 
-    async fn with_memory_access_mode<F, FT, R>(&mut self, f: F) -> Result<R, Error>
+    async fn with_memory_access_mode<F, R>(&mut self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&mut Self) -> FT,
-        FT: Future<Output = Result<R, Error>>,
+        F: async FnOnce(&mut Self) -> Result<R, Error>,
     {
         // enable memory access(MA) mode
         self.set_memory_access_mode(true).await?;
@@ -655,7 +652,7 @@ impl<'probe> Armv8a<'probe> {
     async fn read_cpu_memory_aarch32_32(&mut self, address: u64) -> Result<u32, Error> {
         let address = valid_32bit_address(address)?;
 
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save r0, r1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -680,7 +677,7 @@ impl<'probe> Armv8a<'probe> {
         address: u64,
         data: &mut [u8],
     ) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save x0, x1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -707,7 +704,7 @@ impl<'probe> Armv8a<'probe> {
     }
 
     async fn read_cpu_memory_aarch64_32(&mut self, address: u64) -> Result<u32, Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save x0, x1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -728,7 +725,7 @@ impl<'probe> Armv8a<'probe> {
     }
 
     async fn read_cpu_memory_aarch64_64(&mut self, address: u64) -> Result<u64, Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save x0, x1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -750,7 +747,7 @@ impl<'probe> Armv8a<'probe> {
 
     async fn write_cpu_memory_aarch32_32(&mut self, address: u64, data: u32) -> Result<(), Error> {
         let address = valid_32bit_address(address)?;
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save r0, r1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -773,7 +770,7 @@ impl<'probe> Armv8a<'probe> {
         address: u64,
         data: &[u8],
     ) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save r0, r1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -795,7 +792,7 @@ impl<'probe> Armv8a<'probe> {
     }
 
     async fn write_cpu_memory_aarch64_32(&mut self, address: u64, data: u32) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save x0, x1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -814,7 +811,7 @@ impl<'probe> Armv8a<'probe> {
     }
 
     async fn write_cpu_memory_aarch64_64(&mut self, address: u64, data: u64) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             // Save x0, x1
             armv8a.prepare_for_clobber(0).await?;
             armv8a.prepare_for_clobber(1).await?;
@@ -846,7 +843,7 @@ impl<'probe> Armv8a<'probe> {
         address: u64,
         data: &[u8],
     ) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             let (prefix, aligned, suffix) = armv8a.aligned_to_32(address, data);
             let mut address = address;
 
@@ -900,7 +897,7 @@ impl<'probe> Armv8a<'probe> {
         // Load r0 with the address to write to
         self.set_reg_value(0, address).await?;
 
-        self.with_memory_access_mode(|armv8a| async {
+        self.with_memory_access_mode(async |armv8a| {
             for d in data.chunks(4) {
                 let word = u32::from_le_bytes([d[0], d[1], d[2], d[3]]);
                 // memory write loop
@@ -972,7 +969,7 @@ impl<'probe> Armv8a<'probe> {
         address: u64,
         data: &mut [u8],
     ) -> Result<(), Error> {
-        self.with_core_halted(|armv8a| async {
+        self.with_core_halted(async |armv8a| {
             let (prefix, aligned, suffix) = armv8a.aligned_to_32_mut(address, data);
             let mut address = address;
 
@@ -1041,7 +1038,7 @@ impl<'probe> Armv8a<'probe> {
         let dbgdtr_tx_address = Dbgdtrtx::get_mmio_address_from_base(self.base_address)?;
         let (data, last) = data.split_at_mut(data.len() - std::mem::size_of::<u32>());
 
-        self.with_memory_access_mode(|armv8a| async {
+        self.with_memory_access_mode(async |armv8a| {
             // discard firtst 32bit
             let _ = armv8a.memory.read_word_32(dbgdtr_tx_address).await?;
             for d in data.chunks_mut(4) {
@@ -1090,7 +1087,7 @@ impl<'probe> Armv8a<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Armv8a<'probe> {
+impl CoreInterface for Armv8a<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         // Wait until halted state is active again.
         let start = Instant::now();
@@ -1505,7 +1502,7 @@ impl<'probe> CoreInterface for Armv8a<'probe> {
         }
     }
 
-    fn fpu_support(&mut self) -> Result<bool, crate::error::Error> {
+    async fn fpu_support(&mut self) -> Result<bool, crate::error::Error> {
         // Always available for v8-a
         Ok(true)
     }
@@ -1554,7 +1551,7 @@ impl<'probe> CoreInterface for Armv8a<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> MemoryInterface for Armv8a<'probe> {
+impl MemoryInterface for Armv8a<'_> {
     async fn supports_native_64bit_access(&mut self) -> bool {
         self.state.is_64_bit
     }

@@ -242,7 +242,7 @@ impl<'a> From<&'a mut dyn DapProbe> for SwdSequenceShim<'a> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'a> SwdSequence for SwdSequenceShim<'a> {
+impl SwdSequence for SwdSequenceShim<'_> {
     async fn swj_sequence(&mut self, bit_len: u8, bits: u64) -> Result<(), DebugProbeError> {
         self.0.swj_sequence(bit_len, bits).await
     }

@@ -223,7 +223,7 @@ pub struct Core<'probe> {
     inner: Box<dyn CoreInterface + 'probe>,
 }
 
-impl<'probe> CoreMemoryInterface for Core<'probe> {
+impl CoreMemoryInterface for Core<'_> {
     type ErrorType = Error;
 
     fn memory(&self) -> &dyn MemoryInterface<Self::ErrorType> {
@@ -596,7 +596,7 @@ impl<'probe> Core<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Core<'probe> {
+impl CoreInterface for Core<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         self.wait_for_core_halted(timeout).await
     }

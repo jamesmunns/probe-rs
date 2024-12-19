@@ -748,7 +748,7 @@ impl ArmDebugSequence for MIMXRT5xxS {
 
         thread::sleep(Duration::from_millis(50));
 
-        let mut assert_n_reset = || async { memory.swj_pins(n_reset, n_reset, 0).await };
+        let mut assert_n_reset = async || memory.swj_pins(n_reset, n_reset, 0).await;
 
         if can_read_pins {
             let start = Instant::now();

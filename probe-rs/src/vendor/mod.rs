@@ -32,7 +32,7 @@ pub mod vorago;
 #[async_trait::async_trait(?Send)]
 pub trait Vendor: Send + Sync + std::fmt::Display {
     /// Tries to create a debug sequence for the given chip.
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence>;
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence>;
 
     /// Tries to identify an ARM chip. Returns `Some(target name)` on success.
     async fn try_detect_arm_chip(
@@ -90,10 +90,10 @@ fn vendors<'a>() -> impl Deref<Target = [Box<dyn Vendor>]> + 'a {
 }
 
 /// Tries to create a debug sequence for the given chip.
-pub async fn try_create_debug_sequence(chip: &Chip) -> Option<DebugSequence> {
+pub fn try_create_debug_sequence(chip: &Chip) -> Option<DebugSequence> {
     let vendors = vendors();
     for vendor in vendors.iter() {
-        if let Some(sequence) = vendor.try_create_debug_sequence(chip).await {
+        if let Some(sequence) = vendor.try_create_debug_sequence(chip) {
             return Some(sequence);
         }
     }
@@ -101,7 +101,7 @@ pub async fn try_create_debug_sequence(chip: &Chip) -> Option<DebugSequence> {
     None
 }
 
-async fn try_detect_arm_chip(mut probe: Probe) -> Result<(Probe, Option<Target>), Error> {
+async fn _try_detect_arm_chip(mut probe: Probe) -> Result<(Probe, Option<Target>), Error> {
     let mut found_target = None;
 
     if !probe.has_arm_interface() {
@@ -125,7 +125,7 @@ async fn try_detect_arm_chip(mut probe: Probe) -> Result<(Probe, Option<Target>)
                 {
                     Ok(interface) => interface,
                     Err((interface, error)) => {
-                        probe = interface.close();
+                        probe = interface.close().await;
                         tracing::debug!("Error during ARM chip detection: {error}");
                         // If we can't connect, assume this is not an ARM chip and not an error.
                         return Ok((probe, None));
@@ -161,7 +161,7 @@ async fn try_detect_arm_chip(mut probe: Probe) -> Result<(Probe, Option<Target>)
                     }
                 }
 
-                probe = interface.close();
+                probe = interface.close().await;
             }
             Err((returned_probe, error)) => {
                 probe = returned_probe;
@@ -173,7 +173,7 @@ async fn try_detect_arm_chip(mut probe: Probe) -> Result<(Probe, Option<Target>)
     Ok((probe, found_target))
 }
 
-async fn try_detect_riscv_chip(probe: &mut Probe) -> Result<Option<Target>, Error> {
+async fn _try_detect_riscv_chip(probe: &mut Probe) -> Result<Option<Target>, Error> {
     let mut found_target = None;
 
     probe.select_jtag_tap(0).await?;
@@ -221,7 +221,7 @@ async fn try_detect_riscv_chip(probe: &mut Probe) -> Result<Option<Target>, Erro
     Ok(found_target)
 }
 
-async fn try_detect_xtensa_chip(probe: &mut Probe) -> Result<Option<Target>, Error> {
+async fn _try_detect_xtensa_chip(probe: &mut Probe) -> Result<Option<Target>, Error> {
     let mut found_target = None;
 
     probe.select_jtag_tap(0).await?;
@@ -277,27 +277,28 @@ pub(crate) async fn auto_determine_target(
     // Xtensa and RISC-V interfaces don't need moving the probe. For clarity, their
     // handlers work with the borrowed probe, and we use these wrappers to adapt to the
     // ARM way of moving in and out of the probe.
-    async fn try_detect_riscv_chip_wrapper(
+    async fn _try_detect_riscv_chip_wrapper(
         mut probe: Probe,
     ) -> Result<(Probe, Option<Target>), Error> {
-        try_detect_riscv_chip(&mut probe)
+        _try_detect_riscv_chip(&mut probe)
             .await
             .map(|found_target| (probe, found_target))
     }
 
-    async fn try_detect_xtensa_chip_wrapper(
+    async fn _try_detect_xtensa_chip_wrapper(
         mut probe: Probe,
     ) -> Result<(Probe, Option<Target>), Error> {
-        try_detect_xtensa_chip(&mut probe)
+        _try_detect_xtensa_chip(&mut probe)
             .await
             .map(|found_target| (probe, found_target))
     }
 
     type DetectFn = fn(Probe) -> Result<(Probe, Option<Target>), Error>;
     const ARCHITECTURES: &[DetectFn] = &[
-        try_detect_arm_chip,
-        try_detect_riscv_chip_wrapper,
-        try_detect_xtensa_chip_wrapper,
+        // TODO:
+        // try_detect_arm_chip,
+        // try_detect_riscv_chip_wrapper,
+        // try_detect_xtensa_chip_wrapper,
     ];
 
     for architecture in ARCHITECTURES {

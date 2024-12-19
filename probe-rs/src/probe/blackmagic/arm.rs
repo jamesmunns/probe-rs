@@ -77,7 +77,7 @@ impl UninitializedArmProbe for UninitializedBlackMagicArmProbe {
         Ok(Box::new(interface))
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 }
@@ -197,7 +197,7 @@ impl ArmProbeInterface for BlackMagicProbeArmDebug {
         Ok(self.access_ports.clone())
     }
 
-    fn close(self: Box<Self>) -> Probe {
+    async fn close(self: Box<Self>) -> Probe {
         Probe::from_attached_probe(self.probe)
     }
 

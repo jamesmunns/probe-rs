@@ -1041,6 +1041,7 @@ pub trait ArmDebugSequence: Send + Sync + Debug {
 }
 
 /// Chip-Erase Handling via the Device's Debug Interface
+#[async_trait::async_trait(?Send)]
 pub trait DebugEraseSequence: Send + Sync {
     /// Perform Chip-Erase by vendor specific means.
     ///
@@ -1051,7 +1052,7 @@ pub trait DebugEraseSequence: Send + Sync {
     /// May fail if the device is e.g. permanently locked or due to communication issues with the device.
     /// Some devices require the probe to be disconnected and re-attached after a successful chip-erase in
     /// which case it will return `Error::Probe(DebugProbeError::ReAttachRequired)`
-    fn erase_all(&self, _interface: &mut dyn ArmProbeInterface) -> Result<(), ArmError> {
+    async fn erase_all(&self, _interface: &mut dyn ArmProbeInterface) -> Result<(), ArmError> {
         Err(ArmError::NotImplemented("erase_all"))
     }
 }

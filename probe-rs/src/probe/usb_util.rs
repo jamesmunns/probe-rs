@@ -8,7 +8,7 @@ pub trait InterfaceExt {
 }
 
 impl InterfaceExt for Interface {
-    async fn write_bulk(&self, endpoint: u8, buf: &[u8], timeout: Duration) -> io::Result<usize> {
+    async fn write_bulk(&self, endpoint: u8, buf: &[u8], _timeout: Duration) -> io::Result<usize> {
         let fut = async {
             let comp = self.bulk_out(endpoint, buf.to_vec()).await;
             comp.status.map_err(io::Error::other)?;
@@ -24,7 +24,7 @@ impl InterfaceExt for Interface {
         &self,
         endpoint: u8,
         buf: &mut [u8],
-        timeout: Duration,
+        _timeout: Duration,
     ) -> io::Result<usize> {
         let fut = async {
             let comp = self.bulk_in(endpoint, RequestBuffer::new(buf.len())).await;
@@ -35,6 +35,6 @@ impl InterfaceExt for Interface {
             Ok::<usize, io::Error>(n)
         };
 
-        todo!("read bulk")
+        fut.await
     }
 }

@@ -182,7 +182,7 @@ impl<'a> SwoReader<'a> {
     }
 }
 
-impl<'a> SwoReader<'a> {
+impl SwoReader<'_> {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         use std::{
             cmp,

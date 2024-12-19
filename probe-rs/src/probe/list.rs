@@ -50,7 +50,6 @@ impl Default for Lister {
 /// Trait for a probe lister implementation.
 ///
 /// This trait can be used to implement custom probe listers.
-
 pub trait ProbeLister: std::fmt::Debug {
     /// Try to open a probe using the given selector
     fn open(

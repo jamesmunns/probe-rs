@@ -64,7 +64,7 @@ impl Target {
     /// Create a new target for the given details.
     ///
     /// The given chip must be a member of the given family.
-    pub(super) async fn new(family: &ChipFamily, chip: &Chip) -> Target {
+    pub(super) fn new(family: &ChipFamily, chip: &Chip) -> Target {
         let mut memory_map = chip.memory_map.clone();
         let mut flash_algorithms = Vec::new();
         for algo_name in chip.flash_algorithms.iter() {
@@ -108,17 +108,15 @@ impl Target {
             flash_algorithms.push(algo);
         }
 
-        let debug_sequence = crate::vendor::try_create_debug_sequence(chip)
-            .await
-            .unwrap_or_else(|| {
-                // Default to the architecture of the first core, which is okay if
-                // there is no mixed architectures.
-                match chip.cores[0].core_type.architecture() {
-                    Architecture::Arm => DebugSequence::Arm(DefaultArmSequence::create()),
-                    Architecture::Riscv => DebugSequence::Riscv(DefaultRiscvSequence::create()),
-                    Architecture::Xtensa => DebugSequence::Xtensa(DefaultXtensaSequence::create()),
-                }
-            });
+        let debug_sequence = crate::vendor::try_create_debug_sequence(chip).unwrap_or_else(|| {
+            // Default to the architecture of the first core, which is okay if
+            // there is no mixed architectures.
+            match chip.cores[0].core_type.architecture() {
+                Architecture::Arm => DebugSequence::Arm(DefaultArmSequence::create()),
+                Architecture::Riscv => DebugSequence::Riscv(DefaultRiscvSequence::create()),
+                Architecture::Xtensa => DebugSequence::Xtensa(DefaultXtensaSequence::create()),
+            }
+        });
 
         tracing::info!("Using sequence {:?}", debug_sequence);
 

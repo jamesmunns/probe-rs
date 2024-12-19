@@ -90,7 +90,7 @@ impl ArmDebugSequence for MIMXRT10xx {
 
         // OK to perform before the reset, since the configuration
         // persists beyond the reset.
-        self.use_boot_fuses_for_flexram(interface)?;
+        self.use_boot_fuses_for_flexram(interface).await?;
 
         let mut aircr = Aircr(0);
         aircr.vectkey();
@@ -188,7 +188,9 @@ impl MIMXRT117x {
         dhcsr.set_c_debugen(true);
         dhcsr.enable_write();
 
-        probe.write_word_32(Dhcsr::get_mmio_address(), dhcsr.into()).await?;
+        probe
+            .write_word_32(Dhcsr::get_mmio_address(), dhcsr.into())
+            .await?;
         probe.flush().await?;
 
         let start = Instant::now();
@@ -265,7 +267,8 @@ impl MIMXRT117x {
         expected: u32,
     ) -> Result<(), ArmDebugSequenceError> {
         let pc = self
-            .read_core_reg(probe, PC).await
+            .read_core_reg(probe, PC)
+            .await
             .map_err(|err| ArmDebugSequenceError::SequenceSpecific(err.into()))?;
         if pc != expected {
             let err = format!("The MIMXRT1170's Cortex M7 should be at address {expected:#010X} but it's at {pc:#010X}");
@@ -440,7 +443,8 @@ impl ArmDebugSequence for MIMXRT117x {
             .await?;
 
         // Are we back?
-        self.wait_for_enable(probe, Duration::from_millis(300)).await?;
+        self.wait_for_enable(probe, Duration::from_millis(300))
+            .await?;
 
         // We're back. Halt the core so we can establish the reset context.
         self.halt(probe, true).await?;
@@ -507,22 +511,22 @@ impl DebugCache {
     async fn from_target(probe: &mut dyn ArmMemoryInterface) -> Result<Self, ArmError> {
         let fp_ctrl = FpCtrl(probe.read_word_32(FpCtrl::get_mmio_address()).await?);
 
-        Ok(Self {
-            fp_ctrl,
-            fp_comps: (0..fp_ctrl.num_code())
-                .map(|base_address| -> Result<FpRev2CompX, ArmError> {
-                    let address = FpRev2CompX::get_mmio_address_from_base(base_address as u64 * 4)?;
-                    let fp_comp = probe.read_word_32(address).await?;
-                    Ok(FpRev2CompX(fp_comp))
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        })
+        let mut fp_comps = vec![];
+        for base_address in 0..fp_ctrl.num_code() {
+            let address = FpRev2CompX::get_mmio_address_from_base(base_address as u64 * 4)?;
+            let fp_comp = probe.read_word_32(address).await?;
+            fp_comps.push(FpRev2CompX(fp_comp));
+        }
+
+        Ok(Self { fp_ctrl, fp_comps })
     }
 
     /// Put this cached debug state back into the target.
     async fn restore(mut self, probe: &mut dyn ArmMemoryInterface) -> Result<(), ArmError> {
         self.fp_ctrl.set_key(true);
-        probe.write_word_32(FpCtrl::get_mmio_address(), self.fp_ctrl.into()).await?;
+        probe
+            .write_word_32(FpCtrl::get_mmio_address(), self.fp_ctrl.into())
+            .await?;
 
         for (base, fp_comp) in self.fp_comps.into_iter().enumerate() {
             probe

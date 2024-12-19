@@ -194,7 +194,7 @@ impl<'state> Riscv32<'state> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'state> CoreInterface for Riscv32<'state> {
+impl CoreInterface for Riscv32<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), crate::Error> {
         self.interface.wait_for_core_halted(timeout).await?;
         self.state.pc_written = false;

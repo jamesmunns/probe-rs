@@ -20,7 +20,7 @@ pub struct Microchip;
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for Microchip {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("ATSAMD1")
             || chip.name.starts_with("ATSAMD2")
             || chip.name.starts_with("ATSAMDA")

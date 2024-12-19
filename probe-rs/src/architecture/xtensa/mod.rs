@@ -228,7 +228,7 @@ impl<'probe> Xtensa<'probe> {
     }
 }
 
-impl<'probe> CoreMemoryInterface for Xtensa<'probe> {
+impl CoreMemoryInterface for Xtensa<'_> {
     type ErrorType = Error;
 
     fn memory(&self) -> &dyn MemoryInterface<Self::ErrorType> {
@@ -241,7 +241,7 @@ impl<'probe> CoreMemoryInterface for Xtensa<'probe> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> CoreInterface for Xtensa<'probe> {
+impl CoreInterface for Xtensa<'_> {
     async fn wait_for_core_halted(&mut self, timeout: Duration) -> Result<(), Error> {
         self.interface.wait_for_core_halted(timeout).await?;
         self.on_halted().await?;

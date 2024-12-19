@@ -224,7 +224,7 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
     /// Halts the core.
     pub(crate) async fn halt(&mut self, timeout: Duration) -> Result<(), XtensaError> {
-        self.xdm.schedule_halt();
+        self.xdm.schedule_halt().await;
         self.wait_for_core_halted(timeout).await?;
         Ok(())
     }
@@ -262,10 +262,10 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         let status_idx = self.xdm.schedule_read_nexus_register::<DebugStatus>().await;
 
         // Queue up halting.
-        self.xdm.schedule_halt();
+        self.xdm.schedule_halt().await;
 
         // We will need to check if we managed to halt the core.
-        let is_halted_idx = self.xdm.schedule_read_nexus_register::<DebugStatus>().await;
+        let _is_halted_idx = self.xdm.schedule_read_nexus_register::<DebugStatus>().await;
         self.state.is_halted = true;
 
         // Execute the operation while the core is presumed halted. If it is not, we will have
@@ -333,7 +333,8 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
     async fn schedule_read_cpu_register(&mut self, register: CpuRegister) -> DeferredResultIndex {
         self.xdm
-            .schedule_execute_instruction(Instruction::Wsr(SpecialRegister::Ddr, register));
+            .schedule_execute_instruction(Instruction::Wsr(SpecialRegister::Ddr, register))
+            .await;
         self.xdm.schedule_read_ddr().await
     }
 
@@ -345,7 +346,8 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
 
         // Read special register into the scratch register
         self.xdm
-            .schedule_execute_instruction(Instruction::Rsr(register, CpuRegister::A3));
+            .schedule_execute_instruction(Instruction::Rsr(register, CpuRegister::A3))
+            .await;
 
         let reader = self.schedule_read_cpu_register(CpuRegister::A3).await;
 
@@ -360,17 +362,19 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         value: u32,
     ) -> Result<(), XtensaError> {
         tracing::debug!("Writing special register: {:?}", register);
-        let save_key = self.save_register(CpuRegister::A3).await?;
+        let save_key = Box::pin(self.save_register(CpuRegister::A3)).await?;
 
-        self.xdm.schedule_write_ddr(value);
+        self.xdm.schedule_write_ddr(value).await;
 
         // DDR -> scratch
         self.xdm
-            .schedule_execute_instruction(Instruction::Rsr(SpecialRegister::Ddr, CpuRegister::A3));
+            .schedule_execute_instruction(Instruction::Rsr(SpecialRegister::Ddr, CpuRegister::A3))
+            .await;
 
         // scratch -> target special register
         self.xdm
-            .schedule_execute_instruction(Instruction::Wsr(register, CpuRegister::A3));
+            .schedule_execute_instruction(Instruction::Wsr(register, CpuRegister::A3))
+            .await;
 
         self.restore_register(save_key).await?;
 
@@ -385,9 +389,10 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
     ) -> Result<(), XtensaError> {
         tracing::debug!("Writing {:x} to register: {:?}", value, register);
 
-        self.xdm.schedule_write_ddr(value);
+        self.xdm.schedule_write_ddr(value).await;
         self.xdm
-            .schedule_execute_instruction(Instruction::Rsr(SpecialRegister::Ddr, register));
+            .schedule_execute_instruction(Instruction::Rsr(SpecialRegister::Ddr, register))
+            .await;
 
         Ok(())
     }
@@ -459,20 +464,23 @@ impl<'probe> XtensaCommunicationInterface<'probe> {
         register: impl Into<Register>,
         value: u32,
     ) -> Result<(), XtensaError> {
-        match register.into() {
-            Register::Cpu(register) => self.schedule_write_cpu_register(register, value).await,
-            Register::Special(register) => {
-                self.schedule_write_special_register(register, value).await
+        Box::pin(async {
+            match register.into() {
+                Register::Cpu(register) => self.schedule_write_cpu_register(register, value).await,
+                Register::Special(register) => {
+                    self.schedule_write_special_register(register, value).await
+                }
+                Register::CurrentPc => {
+                    self.schedule_write_special_register(self.state.debug_level.pc(), value)
+                        .await
+                }
+                Register::CurrentPs => {
+                    self.schedule_write_special_register(self.state.debug_level.ps(), value)
+                        .await
+                }
             }
-            Register::CurrentPc => {
-                self.schedule_write_special_register(self.state.debug_level.pc(), value)
-                    .await
-            }
-            Register::CurrentPs => {
-                self.schedule_write_special_register(self.state.debug_level.ps(), value)
-                    .await
-            }
-        }
+        })
+        .await
     }
 
     /// Write a register.
@@ -877,7 +885,7 @@ fn as_bytes_mut<T: DataType>(data: &mut [T]) -> &mut [u8] {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<'probe> MemoryInterface for XtensaCommunicationInterface<'probe> {
+impl MemoryInterface for XtensaCommunicationInterface<'_> {
     async fn read(&mut self, address: u64, dst: &mut [u8]) -> Result<(), crate::Error> {
         self.read_memory(address, dst).await?;
 
@@ -1219,7 +1227,8 @@ impl MemoryAccess for FastMemoryAccess {
         // Read from address in the scratch register
         interface
             .xdm
-            .schedule_execute_instruction(Instruction::Lddr32P(CpuRegister::A3));
+            .schedule_execute_instruction(Instruction::Lddr32P(CpuRegister::A3))
+            .await;
 
         Ok(())
     }
@@ -1331,7 +1340,8 @@ impl MemoryAccess for SlowMemoryAccess {
 
         interface
             .xdm
-            .schedule_execute_instruction(Instruction::L32I(CpuRegister::A3, CpuRegister::A4, 0));
+            .schedule_execute_instruction(Instruction::L32I(CpuRegister::A3, CpuRegister::A4, 0))
+            .await;
 
         Ok(interface.schedule_read_cpu_register(CpuRegister::A4).await)
     }
@@ -1362,7 +1372,8 @@ impl MemoryAccess for SlowMemoryAccess {
         // Store A4 into address A3
         interface
             .xdm
-            .schedule_execute_instruction(Instruction::S32I(CpuRegister::A3, CpuRegister::A4, 0));
+            .schedule_execute_instruction(Instruction::S32I(CpuRegister::A3, CpuRegister::A4, 0))
+            .await;
 
         Ok(())
     }

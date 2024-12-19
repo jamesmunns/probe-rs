@@ -208,7 +208,7 @@ impl<'session> Flasher<'session> {
             run(self).await
         } else {
             let mut active = self.init().await?;
-            active.erase_all().await;
+            active.erase_all().await?;
             active.uninit().await
         };
 
@@ -515,7 +515,7 @@ impl<'session> Flasher<'session> {
                 }
             }
 
-            active.wait_for_write_end(last_page_address).await;
+            active.wait_for_write_end(last_page_address).await?;
             active.uninit().await?;
 
             Ok(())
@@ -976,7 +976,7 @@ impl<O: Operation> ActiveFlasher<'_, O> {
     }
 }
 
-impl<'probe> ActiveFlasher<'probe, Erase> {
+impl ActiveFlasher<'_, Erase> {
     pub(super) async fn erase_all(&mut self) -> Result<(), FlashError> {
         tracing::debug!("Erasing entire chip.");
         let algo = &self.flash_algorithm;
@@ -1052,7 +1052,7 @@ impl<'probe> ActiveFlasher<'probe, Erase> {
     }
 }
 
-impl<'p> ActiveFlasher<'p, Program> {
+impl ActiveFlasher<'_, Program> {
     pub(super) async fn program_page(&mut self, page: &FlashPage) -> Result<(), FlashError> {
         let t1 = Instant::now();
 

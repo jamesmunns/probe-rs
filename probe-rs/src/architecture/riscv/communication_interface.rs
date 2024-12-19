@@ -5,14 +5,13 @@
 //! specification v0.13.2 .
 
 use crate::architecture::riscv::dtm::dtm_access::DtmAccess;
-use crate::Core;
+
 use crate::{
     architecture::riscv::*, config::Target, memory_mapped_bitfield_register,
     probe::DeferredResultIndex, Error as ProbeRsError,
 };
 use std::any::Any;
 use std::collections::HashMap;
-use std::future::Future;
 
 /// Some error occurred when working with the RISC-V core.
 #[derive(thiserror::Error, Debug)]
@@ -891,7 +890,7 @@ impl<'state> RiscvCommunicationInterface<'state> {
         address: u64,
         value: u32,
     ) -> Result<(), RiscvError> {
-        self.cache_write(address, value);
+        self.cache_write(address, value).await;
         self.dtm
             .write_with_timeout(address, value, RISCV_TIMEOUT)
             .await?;
@@ -1408,7 +1407,11 @@ impl<'state> RiscvCommunicationInterface<'state> {
                 // This command requires the core to be halted.
                 // We can do that, so let's try again.
                 let was_running = self.halt_with_previous(Duration::from_millis(100)).await?;
-                do_execute_abstract_command(self, Command(command)).await
+                do_execute_abstract_command(self, Command(command)).await?;
+                if was_running {
+                    self.resume_core().await?;
+                }
+                err
             }
             other => other,
         }
@@ -1736,7 +1739,7 @@ impl<'state> RiscvCommunicationInterface<'state> {
         address: u64,
         value: u32,
     ) -> Result<Option<DeferredResultIndex>, RiscvError> {
-        self.cache_write(address, value);
+        self.cache_write(address, value).await;
         self.dtm.schedule_write(address, value).await
     }
 

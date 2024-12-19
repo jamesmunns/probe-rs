@@ -23,7 +23,7 @@ const INFINEON: JEP106Code = JEP106Code { id: 0x41, cc: 0x00 };
 
 #[async_trait::async_trait(?Send)]
 impl Vendor for Infineon {
-    async fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
+    fn try_create_debug_sequence(&self, chip: &Chip) -> Option<DebugSequence> {
         let sequence = if chip.name.starts_with("XMC4") {
             DebugSequence::Arm(XMC4000::create())
         } else {
