@@ -6,8 +6,9 @@ use std::{
         Arc,
     },
     thread,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use crate::{
     architecture::arm::{

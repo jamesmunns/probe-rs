@@ -25,11 +25,8 @@ use crate::{
     Architecture, CoreInformation, CoreInterface, CoreRegister, CoreStatus, CoreType,
     InstructionSet, MemoryInterface,
 };
-use std::{
-    mem::size_of,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{mem::size_of, sync::Arc, time::Duration};
+use web_time::Instant;
 
 /// Errors for the ARMv7-A state machine
 #[derive(thiserror::Error, Debug)]

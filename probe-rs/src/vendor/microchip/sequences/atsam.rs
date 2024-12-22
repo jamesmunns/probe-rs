@@ -17,8 +17,9 @@ use probe_rs_target::CoreType;
 use std::{
     sync::Arc,
     thread,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 bitfield! {
     /// Device Service Unit Control Register, DSU - CTRL

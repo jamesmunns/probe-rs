@@ -16,8 +16,9 @@ use crate::probe::{DebugProbeError, Probe};
 use crate::{Error as ProbeRsError, MemoryInterface};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 use zerocopy::IntoBytes;
+use web_time::Instant;
 
 #[derive(Debug)]
 pub(crate) struct UninitializedBlackMagicArmProbe {

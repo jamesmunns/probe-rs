@@ -12,6 +12,7 @@ use crate::{
 };
 use std::any::Any;
 use std::collections::HashMap;
+use web_time::Instant;
 
 /// Some error occurred when working with the RISC-V core.
 #[derive(thiserror::Error, Debug)]
@@ -345,6 +346,7 @@ impl RiscvDebugInterfaceState {
 }
 
 /// A single-use factory for creating RISC-V communication interfaces and their states.
+#[async_trait::async_trait(?Send)]
 pub trait RiscvInterfaceBuilder<'probe> {
     /// Creates a new RISC-V communication interface state object.
     ///
@@ -354,7 +356,7 @@ pub trait RiscvInterfaceBuilder<'probe> {
 
     /// Consumes the factory and creates a communication interface
     /// object initialised with the given state.
-    fn attach<'state>(
+    async fn attach<'state>(
         self: Box<Self>,
         state: &'state mut RiscvDebugInterfaceState,
     ) -> Result<RiscvCommunicationInterface<'state>, DebugProbeError>
@@ -363,7 +365,7 @@ pub trait RiscvInterfaceBuilder<'probe> {
 
     /// Consumes the factory and creates a communication interface
     /// object using a JTAG tunnel initialised with the given state.
-    fn attach_tunneled<'state>(
+    async fn attach_tunneled<'state>(
         self: Box<Self>,
         _tunnel_ir_id: u32,
         _tunnel_ir_width: u32,
@@ -381,7 +383,7 @@ pub trait RiscvInterfaceBuilder<'probe> {
     /// object initialised with the given state.
     ///
     /// Automatically determines whether to use JTAG tunneling or not from the target.
-    fn attach_auto<'state>(
+    async fn attach_auto<'state>(
         self: Box<Self>,
         target: &Target,
         state: &'state mut RiscvDebugInterfaceState,
@@ -392,8 +394,9 @@ pub trait RiscvInterfaceBuilder<'probe> {
         let maybe_tunnel = target.jtag.as_ref().and_then(|j| j.riscv_tunnel.as_ref());
         if let Some(tunnel) = maybe_tunnel {
             self.attach_tunneled(tunnel.ir_id, tunnel.ir_width, state)
+                .await
         } else {
-            self.attach(state)
+            self.attach(state).await
         }
     }
 }

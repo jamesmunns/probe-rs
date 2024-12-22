@@ -11,10 +11,8 @@ use crate::rtt::{self, Rtt, ScanRegion};
 use crate::CoreStatus;
 use crate::{core::CoreRegisters, session::Session, Core, InstructionSet};
 use std::marker::PhantomData;
-use std::{
-    fmt::Debug,
-    time::{Duration, Instant},
-};
+use std::{fmt::Debug, time::Duration};
+use web_time::Instant;
 
 /// The timeout for init/uninit routines.
 const INIT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -795,7 +793,7 @@ impl<O: Operation> ActiveFlasher<'_, O> {
             if start.elapsed() >= timeout {
                 return Err(FlashError::Core(Error::Timeout));
             }
-            std::thread::sleep(Duration::from_millis(1));
+            futures_lite::future::yield_now().await;
         }
 
         self.check_for_stack_overflow().await?;

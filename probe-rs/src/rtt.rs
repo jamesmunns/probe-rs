@@ -51,8 +51,8 @@ use crate::Session;
 use crate::{config::MemoryRegion, Core, MemoryInterface};
 use std::ops::Range;
 use std::thread;
-use std::time::Instant;
 use std::{borrow::Cow, time::Duration};
+use web_time::Instant;
 use zerocopy::FromBytes;
 
 /// The RTT interface.

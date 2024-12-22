@@ -12,7 +12,8 @@ pub mod swo;
 use std::fmt;
 use std::iter;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+use web_time::Instant;
 
 use bitvec::prelude::*;
 

@@ -6,8 +6,9 @@ use nusb::{
 use std::{
     fmt::Debug,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use crate::probe::{
     espusbjtag::EspUsbJtagFactory, usb_util::InterfaceExt, DebugProbeError, DebugProbeInfo,

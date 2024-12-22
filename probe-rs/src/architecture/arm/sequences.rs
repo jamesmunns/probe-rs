@@ -1,12 +1,8 @@
 //! Debug sequences to operate special requirements ARM targets.
 
-use std::{
-    error::Error,
-    fmt::Debug,
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{error::Error, fmt::Debug, sync::Arc, thread, time::Duration};
+
+use web_time::Instant;
 
 use probe_rs_target::CoreType;
 

@@ -113,7 +113,7 @@ impl ArchitectureInterface {
                 match &mut ifaces[idx] {
                     JtagInterface::Riscv(state) => {
                         let factory = probe.try_get_riscv_interface_builder().await?;
-                        let iface = factory.attach_auto(target, state)?;
+                        let iface = factory.attach_auto(target, state).await?;
                         combined_state.attach_riscv(target, iface).await
                     }
                     JtagInterface::Xtensa(state) => {
@@ -353,7 +353,7 @@ impl Session {
                     let factory = probe.try_get_riscv_interface_builder().await?;
                     let mut state = factory.create_state();
                     {
-                        let mut interface = factory.attach_auto(&target, &mut state)?;
+                        let mut interface = factory.attach_auto(&target, &mut state).await?;
                         interface.enter_debug_mode().await?;
                     }
 
@@ -574,7 +574,7 @@ impl Session {
             probe.select_jtag_tap(tap_idx).await?;
             if let JtagInterface::Riscv(state) = &mut ifaces[tap_idx] {
                 let factory = probe.try_get_riscv_interface_builder().await?;
-                return Ok(factory.attach_auto(&self.target, state)?);
+                return Ok(factory.attach_auto(&self.target, state).await?);
             }
         }
         Err(RiscvError::NoRiscvTarget.into())

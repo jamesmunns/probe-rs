@@ -10,11 +10,8 @@ use crate::{
     CoreType, HaltReason, InstructionSet, MemoryInterface, MemoryMappedRegister,
 };
 use bitfield::bitfield;
-use std::{
-    mem::size_of,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{mem::size_of, sync::Arc, time::Duration};
+use web_time::Instant;
 
 bitfield! {
     /// Debug Halting Control and Status Register, DHCSR (see armv6-M Architecture Reference Manual C1.6.3)

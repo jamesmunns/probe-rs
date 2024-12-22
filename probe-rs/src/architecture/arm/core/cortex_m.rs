@@ -8,7 +8,8 @@ use crate::{
     semihosting::SemihostingCommand,
     CoreInterface, Error, MemoryMappedRegister,
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 memory_mapped_bitfield_register! {
     pub struct Vtor(u32);

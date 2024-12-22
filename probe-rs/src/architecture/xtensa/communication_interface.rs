@@ -3,8 +3,9 @@
 use std::{
     collections::HashMap,
     ops::Range,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use probe_rs_target::MemoryRange;
 

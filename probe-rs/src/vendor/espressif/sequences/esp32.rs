@@ -2,8 +2,9 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use super::esp::EspFlashSizeDetector;
 use crate::{

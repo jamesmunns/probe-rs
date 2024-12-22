@@ -21,11 +21,8 @@ use crate::{
     BreakpointCause, CoreRegister, CoreType, InstructionSet, MemoryInterface,
 };
 use bitfield::bitfield;
-use std::{
-    mem::size_of,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{mem::size_of, sync::Arc, time::Duration};
+use web_time::Instant;
 
 bitfield! {
     /// Debug Halting Control and Status Register, DHCSR (see armv7-M Architecture Reference Manual C1.6.2)

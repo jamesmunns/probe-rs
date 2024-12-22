@@ -181,7 +181,7 @@ async fn _try_detect_riscv_chip(probe: &mut Probe) -> Result<Option<Target>, Err
     match probe.try_get_riscv_interface_builder().await {
         Ok(factory) => {
             let mut state = factory.create_state();
-            let mut interface = factory.attach(&mut state)?;
+            let mut interface = factory.attach(&mut state).await?;
 
             if let Err(error) = interface.enter_debug_mode().await {
                 tracing::debug!("Failed to enter RISC-V debug mode: {error}");

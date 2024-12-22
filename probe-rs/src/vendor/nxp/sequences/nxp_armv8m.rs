@@ -4,8 +4,9 @@ use bitfield::bitfield;
 use std::{
     sync::Arc,
     thread,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use crate::{
     architecture::arm::{

@@ -1,7 +1,5 @@
 //! Listing probes of various types.
 
-use std::{future::Future, pin::Pin};
-
 use crate::probe::{
     DebugProbeError, DebugProbeInfo, DebugProbeSelector, Probe, ProbeCreationError, ProbeFactory,
 };
@@ -28,16 +26,16 @@ impl Lister {
     }
 
     /// Try to open a probe using the given selector
-    pub fn open(
+    pub async fn open(
         &self,
         selector: impl Into<DebugProbeSelector>,
-    ) -> Pin<Box<dyn Future<Output = Result<Probe, DebugProbeError>>>> {
-        self.lister.open(selector.into())
+    ) -> Result<Probe, DebugProbeError> {
+        self.lister.open(selector.into()).await
     }
 
     /// List all available debug probes
-    pub fn list_all(&self) -> Pin<Box<dyn Future<Output = Vec<DebugProbeInfo>>>> {
-        self.lister.list_all()
+    pub async fn list_all(&self) -> Vec<DebugProbeInfo> {
+        self.lister.list_all().await
     }
 }
 
@@ -50,31 +48,27 @@ impl Default for Lister {
 /// Trait for a probe lister implementation.
 ///
 /// This trait can be used to implement custom probe listers.
+#[async_trait::async_trait(?Send)]
 pub trait ProbeLister: std::fmt::Debug {
     /// Try to open a probe using the given selector
-    fn open(
-        &self,
-        selector: DebugProbeSelector,
-    ) -> Pin<Box<dyn Future<Output = Result<Probe, DebugProbeError>>>>;
+    async fn open(&self, selector: DebugProbeSelector) -> Result<Probe, DebugProbeError>;
 
     /// List all probes found by the lister.
-    fn list_all(&self) -> Pin<Box<dyn Future<Output = Vec<DebugProbeInfo>>>>;
+    async fn list_all(&self) -> Vec<DebugProbeInfo>;
 }
 
 /// Default lister implementation that includes all built-in probe drivers.
 #[derive(Debug, PartialEq, Eq)]
 pub struct AllProbesLister;
 
+#[async_trait::async_trait(?Send)]
 impl ProbeLister for AllProbesLister {
-    fn open(
-        &self,
-        selector: DebugProbeSelector,
-    ) -> Pin<Box<dyn Future<Output = Result<Probe, DebugProbeError>>>> {
-        Box::pin(async move { Self::open(selector).await })
+    async fn open(&self, selector: DebugProbeSelector) -> Result<Probe, DebugProbeError> {
+        Self::open(selector).await
     }
 
-    fn list_all(&self) -> Pin<Box<dyn Future<Output = Vec<DebugProbeInfo>>>> {
-        Box::pin(async { Self::list_all().await })
+    async fn list_all(&self) -> Vec<DebugProbeInfo> {
+        Self::list_all().await
     }
 }
 

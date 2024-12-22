@@ -21,10 +21,8 @@ use crate::{
     Architecture, CoreInformation, CoreInterface, CoreRegister, CoreStatus, CoreType,
     InstructionSet, MemoryInterface,
 };
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
+use web_time::Instant;
 
 /// Errors for the ARMv8-A state machine
 #[derive(thiserror::Error, Debug)]

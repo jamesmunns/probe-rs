@@ -1,7 +1,8 @@
 use std::{
     fmt::Debug,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 use crate::{
     architecture::xtensa::arch::instruction::{Instruction, InstructionEncoding},

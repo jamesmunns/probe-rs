@@ -787,7 +787,7 @@ impl<Probe: DebugProbe + RawJtagIo + 'static> JTAGAccess for Probe {
         writes: &JtagCommandQueue,
     ) -> Result<DeferredResultSet, BatchExecutionError> {
         let mut bits = Vec::with_capacity(writes.len());
-        let t1 = std::time::Instant::now();
+        let t1 = web_time::Instant::now();
         tracing::debug!("Preparing {} writes...", writes.len());
         for (idx, command) in writes.iter() {
             let result = match command {

@@ -4,7 +4,8 @@
 //! Currently, only JTAG is supported.
 
 use bitfield::bitfield;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use crate::architecture::riscv::communication_interface::{
     RiscvCommunicationInterface, RiscvDebugInterfaceState, RiscvError, RiscvInterfaceBuilder,
@@ -34,12 +35,13 @@ impl<'f> JtagDtmBuilder<'f> {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl<'probe> RiscvInterfaceBuilder<'probe> for JtagDtmBuilder<'probe> {
     fn create_state(&self) -> RiscvDebugInterfaceState {
         RiscvDebugInterfaceState::new(Box::<DtmState>::default())
     }
 
-    fn attach<'state>(
+    async fn attach<'state>(
         self: Box<Self>,
         state: &'state mut RiscvDebugInterfaceState,
     ) -> Result<RiscvCommunicationInterface<'state>, DebugProbeError>
@@ -54,7 +56,7 @@ impl<'probe> RiscvInterfaceBuilder<'probe> for JtagDtmBuilder<'probe> {
         ))
     }
 
-    fn attach_tunneled<'state>(
+    async fn attach_tunneled<'state>(
         self: Box<Self>,
         tunnel_ir_id: u32,
         tunnel_ir_width: u32,

@@ -7,7 +7,8 @@ use crate::architecture::arm::ArmError;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+use web_time::Instant;
 
 use crate::architecture::arm::communication_interface::DapProbe;
 use crate::{probe::DebugProbeError, MemoryMappedRegister};

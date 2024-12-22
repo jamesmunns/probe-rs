@@ -3,11 +3,11 @@
 use probe_rs::probe::{list::Lister, Probe};
 use probe_rs::{config::TargetSelector, probe::WireProtocol, MemoryInterface, Permissions};
 
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use std::num::ParseIntError;
-use std::time::{Duration, Instant};
-
-use anyhow::{anyhow, Context, Result};
+use std::time::Duration;
+use web_time::Instant;
 
 #[derive(clap::Parser)]
 struct Cli {

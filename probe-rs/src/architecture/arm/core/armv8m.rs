@@ -19,11 +19,8 @@ use crate::{
     CoreType, HaltReason, InstructionSet, MemoryInterface, MemoryMappedRegister,
 };
 use bitfield::bitfield;
-use std::{
-    mem::size_of,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{mem::size_of, sync::Arc, time::Duration};
+use web_time::Instant;
 
 /// The state of a core that can be used to persist core state across calls to multiple different cores.
 pub struct Armv8m<'probe> {

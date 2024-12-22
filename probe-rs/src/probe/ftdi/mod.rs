@@ -23,8 +23,9 @@ use std::{
     io::{Read, Write},
     iter,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration},
 };
+use web_time::Instant;
 
 mod command_compacter;
 mod ftdaye;

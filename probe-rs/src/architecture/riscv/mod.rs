@@ -16,10 +16,7 @@ use crate::{
 use bitfield::bitfield;
 use communication_interface::{AbstractCommandErrorKind, RiscvCommunicationInterface, RiscvError};
 use registers::{FP, RA, RISCV_CORE_REGSISTERS, SP};
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 #[macro_use]
 pub(crate) mod registers;
