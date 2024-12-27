@@ -284,6 +284,6 @@ impl StLinkUsb for StLinkUsbDevice {
     /// STLink does not respond to USB requests.
     async fn reset(&mut self) -> Result<(), StlinkError> {
         tracing::debug!("Resetting USB device of STLink");
-        self.device_handle.reset().map_err(StlinkError::Usb)
+        self.device_handle.reset().await.map_err(StlinkError::Usb)
     }
 }

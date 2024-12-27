@@ -560,14 +560,14 @@ pub async fn try_attach_to_rtt(
 
 /// Try to attach to RTT, with the given timeout.
 pub async fn try_attach_to_rtt_shared(
-    session: &parking_lot::FairMutex<Session>,
+    session: &async_mutex::Mutex<Session>,
     core_id: usize,
     timeout: Duration,
     rtt_region: &ScanRegion,
 ) -> Result<Rtt, Error> {
     try_attach_to_rtt_inner(
         || async {
-            let mut session_handle = session.lock();
+            let mut session_handle = session.lock().await;
             let mut core = session_handle.core(core_id).await?;
             Rtt::attach_region(&mut core, rtt_region).await
         },

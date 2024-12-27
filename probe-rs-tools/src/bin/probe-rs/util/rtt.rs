@@ -281,8 +281,8 @@ pub struct RttActiveUpChannel {
 }
 
 impl RttActiveUpChannel {
-    pub fn new(
-        core: &mut Core,
+    pub async fn new(
+        core: &mut Core<'_>,
         up_channel: UpChannel,
         channel_config: &RttChannelConfig,
         timestamp_offset: UtcOffset,
@@ -338,8 +338,8 @@ impl RttActiveUpChannel {
                 None
             },
         ) {
-            original_mode = Some(up_channel.mode(core)?);
-            up_channel.set_mode(core, mode)?;
+            original_mode = Some(up_channel.mode(core).await?);
+            up_channel.set_mode(core, mode).await?;
         }
 
         Ok(Self {
@@ -370,8 +370,8 @@ impl RttActiveUpChannel {
     /// Polls the RTT target for new data on the channel represented by `self`.
     /// Processes all the new data into the channel internal buffer and
     /// returns the number of bytes that was read.
-    pub fn poll_rtt(&mut self, core: &mut Core) -> Result<Option<usize>, Error> {
-        match self.up_channel.read(core, self.rtt_buffer.as_mut())? {
+    pub async fn poll_rtt(&mut self, core: &mut Core<'_>) -> Result<Option<usize>, Error> {
+        match self.up_channel.read(core, self.rtt_buffer.as_mut()).await? {
             0 => Ok(None),
             count => Ok(Some(count)),
         }
@@ -380,12 +380,12 @@ impl RttActiveUpChannel {
     /// Retrieves available data from the channel and if available, returns `Some(channel_number:String, formatted_data:String)`.
     /// If no data is available, or we encounter a recoverable error, it returns `None` value for `formatted_data`.
     /// Non-recoverable errors are propagated to the caller.
-    pub fn poll_process_rtt_data(
+    pub async fn poll_process_rtt_data(
         &mut self,
-        core: &mut Core,
+        core: &mut Core<'_>,
         collector: &mut impl ChannelDataCallbacks,
     ) -> Result<(), Error> {
-        let Some(bytes_read) = self.poll_rtt(core)? else {
+        let Some(bytes_read) = self.poll_rtt(core).await? else {
             return Ok(());
         };
 
@@ -395,9 +395,9 @@ impl RttActiveUpChannel {
     }
 
     /// Clean up temporary changes made to the channel.
-    pub fn clean_up(&mut self, core: &mut Core) -> Result<(), Error> {
+    pub async fn clean_up(&mut self, core: &mut Core<'_>) -> Result<(), Error> {
         if let Some(mode) = self.original_mode.take() {
-            self.up_channel.set_mode(core, mode)?;
+            self.up_channel.set_mode(core, mode).await?;
         }
         Ok(())
     }
@@ -424,8 +424,15 @@ impl RttActiveDownChannel {
         self.down_channel.number()
     }
 
-    pub fn push_rtt(&mut self, core: &mut Core<'_>, data: impl AsRef<[u8]>) -> Result<(), Error> {
-        self.down_channel.write(core, data.as_ref()).map(|_| ())
+    pub async fn push_rtt(
+        &mut self,
+        core: &mut Core<'_>,
+        data: impl AsRef<[u8]>,
+    ) -> Result<(), Error> {
+        self.down_channel
+            .write(core, data.as_ref())
+            .await
+            .map(|_| ())
     }
 }
 
@@ -485,8 +492,8 @@ pub enum RttSymbolError {
 
 impl RttActiveTarget {
     /// RttActiveTarget collects references to all the `RttActiveChannel`s, for latter polling/pushing of data.
-    pub fn new(
-        core: &mut Core,
+    pub async fn new(
+        core: &mut Core<'_>,
         rtt: Rtt,
         defmt_state: Option<Arc<DefmtState>>,
         rtt_config: &RttConfig,
@@ -502,13 +509,16 @@ impl RttActiveTarget {
                 .channel_config(channel.number())
                 .cloned()
                 .unwrap_or_default();
-            active_up_channels.push(RttActiveUpChannel::new(
-                core,
-                channel,
-                &channel_config,
-                timestamp_offset,
-                defmt_state.clone(),
-            )?);
+            active_up_channels.push(
+                RttActiveUpChannel::new(
+                    core,
+                    channel,
+                    &channel_config,
+                    timestamp_offset,
+                    defmt_state.clone(),
+                )
+                .await?,
+            );
         }
 
         let active_down_channels = rtt
@@ -540,27 +550,27 @@ impl RttActiveTarget {
 
     /// Polls the RTT target on all channels and returns available data.
     /// An error on any channel will return an error instead of incomplete data.
-    pub fn poll_rtt_fallible(
+    pub async fn poll_rtt_fallible(
         &mut self,
-        core: &mut Core,
+        core: &mut Core<'_>,
         collector: &mut impl ChannelDataCallbacks,
     ) -> Result<(), Error> {
         for channel in self.active_up_channels.iter_mut() {
-            channel.poll_process_rtt_data(core, collector)?;
+            channel.poll_process_rtt_data(core, collector).await?;
         }
         Ok(())
     }
 
     /// Polls the RTT target on all channels and returns available data.
     /// An error on any channel will return an error instead of incomplete data.
-    pub fn poll_channel_fallible(
+    pub async fn poll_channel_fallible(
         &mut self,
-        core: &mut Core,
+        core: &mut Core<'_>,
         channel: usize,
         collector: &mut impl ChannelDataCallbacks,
     ) -> Result<(), Error> {
         if let Some(channel) = self.active_up_channels.get_mut(channel) {
-            channel.poll_process_rtt_data(core, collector)?;
+            channel.poll_process_rtt_data(core, collector).await?;
             Ok(())
         } else {
             Err(Error::MissingChannel(channel))
@@ -568,31 +578,31 @@ impl RttActiveTarget {
     }
 
     /// Send data to a down channel.
-    pub fn write_down_channel(
+    pub async fn write_down_channel(
         &mut self,
-        core: &mut Core,
+        core: &mut Core<'_>,
         channel: usize,
         data: impl AsRef<[u8]>,
     ) -> Result<(), Error> {
         if let Some(channel) = self.active_down_channels.get_mut(channel) {
-            channel.push_rtt(core, data)
+            channel.push_rtt(core, data).await
         } else {
             Err(Error::MissingChannel(channel))
         }
     }
 
     /// Clean up temporary changes made to the channels.
-    pub fn clean_up(&mut self, core: &mut Core) -> Result<(), Error> {
+    pub async fn clean_up(&mut self, core: &mut Core<'_>) -> Result<(), Error> {
         for channel in self.active_up_channels.iter_mut() {
-            channel.clean_up(core)?;
+            channel.clean_up(core).await?;
         }
         Ok(())
     }
 
     /// Overwrites the control block with zeros. This is useful after resets.
-    pub fn clear_control_block(&mut self, core: &mut Core) -> Result<(), Error> {
+    pub async fn clear_control_block(&mut self, core: &mut Core<'_>) -> Result<(), Error> {
         let zeros = vec![0; Rtt::control_block_size(core)];
-        core.write(self.control_block_addr, &zeros)?;
+        core.write(self.control_block_addr, &zeros).await?;
         self.active_down_channels.clear();
         self.active_up_channels.clear();
         Ok(())

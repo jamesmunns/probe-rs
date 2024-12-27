@@ -422,6 +422,7 @@ impl Device {
 
         let handle = handle
             .detach_and_claim_interface(intf)
+            .await
             .map_err(|e| open_error(e, "taking control over USB device"))?;
 
         tracing::debug!("Opened FTDI device: {:?}", chip_type);

@@ -3,11 +3,7 @@ use nusb::{
     transfer::{Direction, EndpointType},
     DeviceInfo,
 };
-use std::{
-    fmt::Debug,
-    sync::Arc,
-    time::{Duration},
-};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 use web_time::Instant;
 
 use crate::probe::{
@@ -169,6 +165,7 @@ impl ProtocolHandler {
                     0,
                     USB_TIMEOUT,
                 )
+                .await
                 .map_err(ProbeCreationError::Usb)?;
             if !buffer.is_empty() {
                 break buffer;
